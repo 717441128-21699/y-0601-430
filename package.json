@@ -1,0 +1,52 @@
+{
+  "name": "ski-resort-management",
+  "version": "1.0.0",
+  "description": "大型滑雪场智慧调度与安全管理桌面系统",
+  "main": "dist-electron/main.js",
+  "author": "SkiResort Team",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "preview": "vite preview",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "antd": "^5.12.0",
+    "@ant-design/charts": "^2.0.0",
+    "@ant-design/icons": "^5.2.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "dayjs": "^1.11.10",
+    "echarts": "^5.4.3",
+    "echarts-for-react": "^3.0.2",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.2",
+    "vite-plugin-electron": "^0.15.4",
+    "vite-plugin-electron-renderer": "^0.14.5"
+  },
+  "build": {
+    "appId": "com.skiresort.management",
+    "productName": "滑雪场智慧调度系统",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
