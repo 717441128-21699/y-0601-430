@@ -335,7 +335,7 @@ const CoachManagement: React.FC = () => {
         { key: 'schedule', tab: <span><ScheduleOutlined /> 教练排班表</span> },
         { key: 'bookings', tab: <span><BookOutlined /> 课程预约管理 <Badge count={pendingBookings.length} size="small" offset={[4, -2]}/></span> },
         { key: 'stats', tab: <span><StarOutlined /> 教练资质统计</span> }
-      ]} activeTabKey={activeTab} onChange={setActiveTab}
+      ]} activeTabKey={activeTab} onTabChange={setActiveTab}
         tabBarExtraContent={
           activeTab === 'bookings' ? (
             <Space>
@@ -629,7 +629,7 @@ const CoachManagement: React.FC = () => {
         {rescheduleModal && (
           <div>
             <Alert type="info" showIcon style={{ marginBottom: 16 }}
-              title="原课程信息"
+              message="原课程信息"
               description={`学员：${rescheduleModal.studentName} | 教练：${rescheduleModal.coachName} | 原时间：${rescheduleModal.date} ${rescheduleModal.startTime}-${rescheduleModal.endTime}`}
             />
             <Paragraph type="secondary" style={{ fontSize: 12 }}>申请原因：{rescheduleModal.rescheduleReason || '未填写'}</Paragraph>

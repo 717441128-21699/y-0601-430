@@ -40,11 +40,15 @@ const Dashboard: React.FC = () => {
   const { message } = AntdApp.useApp()
   const {
     slopes, devices, weather, statistics, densityAlerts, rescueRecords,
-    workOrders, scheduleTasks, coaches, bookings
+    workOrders, scheduleTasks, coaches, bookings, spareParts
   } = useAppStore()
 
   const coachCount = coaches.length
   const bookingCount = bookings.length
+
+  const pendingBookings = bookings.filter(b => b.approvalStatus === 'pending')
+  const inProgressBookings = bookings.filter(b => b.status === 'in_progress')
+  const lowStockParts = spareParts.filter(p => p.stock < p.safeStock)
 
   const todayStats = statistics[statistics.length - 1]
   const yesterdayStats = statistics[statistics.length - 2]
@@ -499,14 +503,14 @@ const Dashboard: React.FC = () => {
               </Col>
               <Col span={12}>
                 <Statistic title={<span style={{ fontSize: 11 }}>待审批</span>}
-                  value={useAppStore.getState().bookings.filter(b => b.approvalStatus === 'pending').length}
+                  value={pendingBookings.length}
                   valueStyle={{ fontSize: 18, color: '#fa8c16' }} />
               </Col>
             </Row>
             <Divider style={{ margin: '10px 0' }} />
             <List
               size="small"
-              dataSource={useAppStore.getState().bookings.filter(b => b.status === 'in_progress')}
+              dataSource={inProgressBookings}
               renderItem={(b) => (
                 <List.Item style={{ padding: '4px 0' }}>
                   <List.Item.Meta
@@ -538,7 +542,7 @@ const Dashboard: React.FC = () => {
             <Title level={5} style={{ fontSize: 12, margin: '0 0 8px', color: '#8c8c8c' }}>⚠️ 备件预警</Title>
             <List
               size="small"
-              dataSource={useAppStore.getState().spareParts.filter(p => p.stock < p.safeStock).slice(0, 4)}
+              dataSource={lowStockParts.slice(0, 4)}
               renderItem={(p) => (
                 <Tooltip title={`安全库存：${p.safeStock}${p.unit}，当前库存：${p.stock}${p.unit}`}>
                   <List.Item style={{ padding: '4px 0', cursor: 'pointer' }}>

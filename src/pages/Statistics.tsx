@@ -460,9 +460,9 @@ const Statistics: React.FC = () => {
           { key: 'device', tab: <span><BarChartOutlined /> 设备利用率</span> },
           { key: 'detail', tab: <span><CalendarOutlined /> 每日明细报表</span> }
         ]}
-        activeTabKey={activeTab} onChange={setActiveTab}
+        activeTabKey={activeTab} onTabChange={setActiveTab}
         tabBarExtraContent={<Space>
-          <Alert type="success" showIcon message="数据自动每5分钟刷新" style={{ padding: '2px 8px', margin: 0 }} size="small" />
+          <Alert type="success" showIcon message="数据自动每5分钟刷新" style={{ padding: '2px 8px', margin: 0 }} />
         </Space>}
       >
         {activeTab === 'overview' && (
@@ -749,7 +749,7 @@ const Statistics: React.FC = () => {
                   <Table.Summary fixed>
                     <Table.Summary.Row style={{ fontWeight: 'bold', background: '#f5f5f5' }}>
                       <Table.Summary.Cell index={0}>本页合计/平均</Table.Summary.Cell>
-                      <Table.Summary.Cell index={1}><Text type="primary" strong>{v.toLocaleString()} 人次</Text></Table.Summary.Cell>
+                      <Table.Summary.Cell index={1}><Text style={{ color: '#1677ff' }} strong>{v.toLocaleString()} 人次</Text></Table.Summary.Cell>
                       <Table.Summary.Cell index={2}><Text type="success" strong>¥{r.toLocaleString()}</Text></Table.Summary.Cell>
                       <Table.Summary.Cell index={3}><Tag>{(pageData.reduce((s, x) => s + x.avgStayHours, 0) / pageData.length).toFixed(1)}h</Tag></Table.Summary.Cell>
                       <Table.Summary.Cell index={4}>{pageData.reduce((s, x) => s + x.powerConsumption, 0).toLocaleString()} kWh</Table.Summary.Cell>

@@ -295,7 +295,7 @@ const DeviceManagement: React.FC = () => {
       ) : <Text type="secondary">-</Text>
     },
     { title: '告警信息', dataIndex: 'warningMessage', key: 'warn', width: 200,
-      render: (v) => v ? <Alert type="warning" message={v} showIcon size="small" /> : <Text type="secondary">正常</Text>
+      render: (v) => v ? <Alert type="warning" message={v} showIcon style={{ padding: '4px 8px' }} /> : <Text type="secondary">正常</Text>
     },
     { title: '操作', key: 'action', width: 160, fixed: 'right',
       render: (_, r) => (
@@ -307,6 +307,7 @@ const DeviceManagement: React.FC = () => {
                 deviceId: r.id,
                 deviceName: r.name,
                 deviceType: r.type,
+                location: r.location,
                 type: r.status === 'fault' ? 'emergency' : 'preventive',
                 priority: r.status === 'fault' ? 'urgent' : 'high',
                 description: r.warningMessage || `运行${r.runHours}小时，到达维保周期`
@@ -334,18 +335,29 @@ const DeviceManagement: React.FC = () => {
     setAssignModal(null)
   }
 
+  const handleDeviceSelect = (deviceId: string) => {
+    const device = devices.find(d => d.id === deviceId)
+    if (device) {
+      addWoForm.setFieldsValue({
+        deviceName: device.name,
+        deviceType: device.type,
+        location: device.location
+      })
+    }
+  }
+
   const handleAddWo = (values: any) => {
     const device = devices.find(d => d.id === values.deviceId)
     addWorkOrder({
       deviceId: values.deviceId,
       deviceName: device?.name || values.deviceName,
-      deviceType: values.deviceType,
+      deviceType: device?.type || values.deviceType,
       type: values.type,
       priority: values.priority,
       description: values.description,
       estimatedHours: values.estimatedHours || 4,
       status: 'pending',
-      location: device?.location || '雪场',
+      location: device?.location || values.location || '雪场',
       reporter: '手动创建',
       partsRequired: []
     })
@@ -411,7 +423,7 @@ const DeviceManagement: React.FC = () => {
           { key: 'spareparts', tab: <span><ContainerOutlined /> 备件库存 <Badge count={lowStockParts.length} size="small" offset={[4, -2]}/></span> },
           { key: 'teams', tab: <span><TeamOutlined /> 维修班组</span> }
         ]}
-        activeTabKey={activeTab} onChange={setActiveTab}
+        activeTabKey={activeTab} onTabChange={setActiveTab}
         tabBarExtraContent={activeTab === 'workorders' ? (
           <Space>
             <Radio.Group value={woStatusFilter} onChange={(e) => setWoStatusFilter(e.target.value)} size="small">
@@ -509,7 +521,7 @@ const DeviceManagement: React.FC = () => {
                     </Space>
                   </div>
                   {t.currentWorkOrder && (
-                    <Alert type="info" showIcon size="small" message={`正在执行工单：${t.currentWorkOrder}`} />
+                    <Alert type="info" showIcon message={`正在执行工单：${t.currentWorkOrder}`} style={{ padding: '4px 8px' }} />
                   )}
                   <Divider style={{ margin: '10px 0' }} />
                   <Row gutter={8}>
@@ -642,7 +654,7 @@ const DeviceManagement: React.FC = () => {
         {assignModal && (
           <div>
             <Alert type="info" showIcon style={{ marginBottom: 16 }}
-              title="工单信息"
+              message="工单信息"
               description={`${assignModal.deviceName} - ${assignModal.description.slice(0, 50)}...`}
             />
             <Form form={assignForm} layout="vertical" onFinish={handleAssign}>
@@ -700,7 +712,8 @@ const DeviceManagement: React.FC = () => {
           <Row gutter={12}>
             <Col xs={24} sm={14}>
               <Form.Item label="选择设备" name="deviceId" rules={[{ required: true }]}>
-                <Select placeholder="选择需要维保的设备" showSearch optionFilterProp="label">
+                <Select placeholder="选择需要维保的设备" showSearch optionFilterProp="label"
+                  onChange={handleDeviceSelect}>
                   {devices.map(d => (
                     <Option key={d.id} value={d.id} label={d.name}>
                       <Space>
@@ -718,7 +731,12 @@ const DeviceManagement: React.FC = () => {
             </Col>
             <Col xs={24} sm={10}>
               <Form.Item label="设备名称（回显）" name="deviceName">
-                <Input />
+                <Input readOnly style={{ background: '#f5f5f5' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item label="位置" name="location">
+                <Input readOnly style={{ background: '#f5f5f5' }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>

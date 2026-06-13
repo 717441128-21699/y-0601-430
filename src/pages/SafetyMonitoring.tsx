@@ -184,12 +184,10 @@ const SafetyMonitoring: React.FC = () => {
       render: (_, r) => (
         <Space size={2}>
           {!r.resolved && <Button size="small" type="primary" ghost onClick={() => {
-            updateRescueRecord ? null : null
             message.success('已向该区域发送疏导广播')
             addNotification({ type: 'info', title: '广播已下发', message: `${r.slopeName}疏导广播已发送` })
           }}>广播疏导</Button>}
           {!r.resolved && <Button size="small" onClick={() => {
-            updateRescueRecord ? null : null
             message.info('已标记为关注中，系统将持续监测')
           }}>标记关注</Button>}
         </Space>
@@ -227,7 +225,7 @@ const SafetyMonitoring: React.FC = () => {
     { title: '救援人员', dataIndex: 'rescuerNames', key: 'rescuerNames', width: 130,
       render: (names: string[]) => names.length ? (
         <Space wrap size={3}>
-          {names.map((n, i) => <Avatar key={i} size={20} style={{ background: ['#1677ff', '#52c41a', '#722ed1'][i % 3], fontSize: 10 }} title={n}>{n[0]}</Avatar>)}
+          {names.map((n, i) => <Tooltip key={i} title={n}><Avatar size={20} style={{ background: ['#1677ff', '#52c41a', '#722ed1'][i % 3], fontSize: 10 }}>{n[0]}</Avatar></Tooltip>)}
         </Space>
       ) : <Tag color="red" icon={<AlertOutlined />}>未派遣</Tag>
     },
@@ -460,7 +458,7 @@ const SafetyMonitoring: React.FC = () => {
         { key: 'rescues', tab: <span><MedicineBoxOutlined /> 救援管理 <Badge count={activeRescues.length} size="small" /></span> },
         { key: 'team', tab: <span><TeamOutlined /> 救援队伍</span> },
         { key: 'history', tab: <span><HistoryOutlined /> 历史归档</span> }
-      ]} activeTabKey={activeTab} onChange={setActiveTab}
+      ]} activeTabKey={activeTab} onTabChange={setActiveTab}
         tabBarExtraContent={activeTab === 'alerts' ? (
           <Space>
             <Radio.Group value={resolvedFilter} onChange={(e) => setResolvedFilter(e.target.value)} size="small">

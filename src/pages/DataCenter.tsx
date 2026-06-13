@@ -32,6 +32,7 @@ const DataCenter: React.FC = () => {
   const { message } = AntdApp.useApp()
   const { weather, visitorForecast, devices } = useAppStore()
   const [weatherDays, setWeatherDays] = useState(2)
+  const [weatherTab, setWeatherTab] = useState('chart')
 
   const currentWeather = weather[0]
 
@@ -193,7 +194,7 @@ const DataCenter: React.FC = () => {
                       </Col>
                     </Row>
                     <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 4 }}>上次：{d.lastSync.slice(11)}</div>
-                    {d.warning && <Alert type={d.status === 'disconnected' ? 'error' : 'warning'} message={d.warning} showIcon size="small" style={{ marginTop: 6, padding: '4px 8px' }} />}
+                    {d.warning && <Alert type={d.status === 'disconnected' ? 'error' : 'warning'} message={d.warning} showIcon style={{ marginTop: 6, padding: '4px 8px' }} />}
                   </div>
                 </Col>
               ))}
@@ -208,6 +209,8 @@ const DataCenter: React.FC = () => {
             className="stat-card"
             title={<Space><CloudOutlined style={{ color: '#13c2c2' }} />气象预报数据中心</Space>}
             tabList={[{ key: 'chart', tab: <span><LineChartOutlined /> 趋势图</span> }, { key: 'table', tab: <span><DatabaseOutlined /> 详细数据</span> }]}
+            activeTabKey={weatherTab}
+            onTabChange={setWeatherTab}
             tabBarExtraContent={
               <Space>
                 <Select value={weatherDays} onChange={setWeatherDays} style={{ width: 130 }} size="small">
@@ -219,89 +222,85 @@ const DataCenter: React.FC = () => {
               </Space>
             }
           >
-            {(tab) => {
-              if (tab === 'chart') {
-                return (
-                  <div>
-                    <Row gutter={[16, 12]} style={{ marginBottom: 16 }}>
-                      {Object.keys(weatherByDay).map(date => {
-                        const wd = weatherByDay[date]
-                        const maxT = Math.max(...wd.map(w => w.temperature))
-                        const minT = Math.min(...wd.map(w => w.temperature))
-                        const avgWind = (wd.reduce((s, w) => s + w.windSpeed, 0) / wd.length).toFixed(1)
-                        const totalSnow = (wd.reduce((s, w) => s + w.snowfall, 0)).toFixed(1)
-                        const isWeekend = dayjs(date).day() === 0 || dayjs(date).day() === 6
-                        return (
-                          <Col xs={24} sm={12} md={6} key={date}>
-                            <div style={{ padding: 12, borderRadius: 8, background: isWeekend ? '#e6f7ff' : '#fafafa', border: '1px solid #e8e8e8' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                <Text strong>{dayjs(date).format('MM-DD dddd')}</Text>
-                                {isWeekend && <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>周末</Tag>}
-                              </div>
-                              <Row>
-                                <Col span={12}><Statistic title={<span style={{ fontSize: 11 }}>气温范围</span>} prefix={<ArrowDownOutlined style={{ color: '#1677ff' }} />} value={minT} suffix={`~ ${maxT}°C`} valueStyle={{ fontSize: 16 }} /></Col>
-                                <Col span={12}><Statistic title={<span style={{ fontSize: 11 }}>降雪总量</span>} value={totalSnow} suffix="mm" valueStyle={{ fontSize: 16, color: '#13c2c2' }} /></Col>
-                              </Row>
-                              <Row>
-                                <Col span={12}><div style={{ fontSize: 11, color: '#8c8c8c' }}>平均风速</div><Text strong style={{ color: '#52c41a' }}>{avgWind} m/s</Text></Col>
-                                <Col span={12}><div style={{ fontSize: 11, color: '#8c8c8c' }}>造雪条件</div>
-                                  {minT < -2 && avgWind < 15
-                                    ? <Tag color="green" style={{ fontSize: 10, margin: 0 }}>极佳</Tag>
-                                    : minT < 0 && avgWind < 20
-                                      ? <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>良好</Tag>
-                                      : minT < 2 && avgWind < 25
-                                        ? <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>一般</Tag>
-                                        : <Tag color="red" style={{ fontSize: 10, margin: 0 }}>不宜</Tag>
-                                  }
-                                </Col>
-                              </Row>
-                            </div>
-                          </Col>
-                        )
-                      })}
-                    </Row>
-                    <ReactECharts option={weatherChartOption} style={{ height: 340 }} notMerge />
-                  </div>
-                )
-              }
-              return (
-                <Table<WeatherForecast>
-                  size="small"
-                  dataSource={weather.slice(0, weatherDays * 24)}
-                  columns={[
-                    { title: '日期', dataIndex: 'date', key: 'date', width: 100, fixed: 'left',
-                      render: (d) => <Tag color="blue">{dayjs(d).format('MM-DD ddd')}</Tag> },
-                    { title: '时间', dataIndex: 'time', key: 'time', width: 70 },
-                    { title: '天气', dataIndex: 'weatherCondition', key: 'weatherCondition', width: 80,
-                      render: (w) => <Tag icon={<CloudOutlined />}>{w}</Tag> },
-                    { title: '温度(°C)', dataIndex: 'temperature', key: 'temperature', width: 90,
-                      render: (t) => <Text type={t < -10 ? 'danger' : t < 0 ? 'warning' : 'success'} strong>{t}°</Text> },
-                    { title: '风速', dataIndex: 'windSpeed', key: 'windSpeed', width: 80,
-                      render: (v, r) => <span>{v}m/s <Text type="secondary">({r.windDirection})</Text></span> },
-                    { title: '湿度', dataIndex: 'humidity', key: 'humidity', width: 80, render: (h) => `${h}%` },
-                    { title: '降雪', dataIndex: 'snowfall', key: 'snowfall', width: 80,
-                      render: (s) => s > 0 ? <Text type="primary">{s} mm/h</Text> : <Text type="secondary">无</Text> },
-                    { title: '能见度', dataIndex: 'visibility', key: 'visibility', width: 90,
-                      render: (v) => <Text type={v < 500 ? 'danger' : v < 1000 ? 'warning' : 'success'}>{v}m</Text> },
-                    { title: '气压', dataIndex: 'pressure', key: 'pressure', width: 80, render: (p) => `${p}hPa` },
-                    { title: '造雪评估', key: 'sRating', width: 100, fixed: 'right',
-                      render: (_, r) => {
-                        const score = (r.temperature <= -5 ? 30 : r.temperature <= -2 ? 20 : r.temperature <= 0 ? 10 : 0)
-                          + (r.humidity >= 70 ? 20 : r.humidity >= 50 ? 10 : 0)
-                          + (r.windSpeed <= 10 ? 25 : r.windSpeed <= 15 ? 15 : r.windSpeed <= 20 ? 5 : 0)
-                          + (r.snowfall > 2 ? 25 : r.snowfall > 0.5 ? 15 : 5)
-                        return <Tag color={score >= 75 ? 'green' : score >= 50 ? 'blue' : score >= 25 ? 'orange' : 'red'}>
-                          {score >= 75 ? '优' : score >= 50 ? '良' : score >= 25 ? '中' : '差'} ({score}分)
-                        </Tag>
-                      }
+            {weatherTab === 'chart' ? (
+              <div>
+                <Row gutter={[16, 12]} style={{ marginBottom: 16 }}>
+                  {Object.keys(weatherByDay).map(date => {
+                    const wd = weatherByDay[date]
+                    const maxT = Math.max(...wd.map(w => w.temperature))
+                    const minT = Math.min(...wd.map(w => w.temperature))
+                    const avgWindVal = wd.reduce((s, w) => s + w.windSpeed, 0) / wd.length
+                    const avgWind = avgWindVal.toFixed(1)
+                    const totalSnow = (wd.reduce((s, w) => s + w.snowfall, 0)).toFixed(1)
+                    const isWeekend = dayjs(date).day() === 0 || dayjs(date).day() === 6
+                    return (
+                      <Col xs={24} sm={12} md={6} key={date}>
+                        <div style={{ padding: 12, borderRadius: 8, background: isWeekend ? '#e6f7ff' : '#fafafa', border: '1px solid #e8e8e8' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <Text strong>{dayjs(date).format('MM-DD dddd')}</Text>
+                            {isWeekend && <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>周末</Tag>}
+                          </div>
+                          <Row>
+                            <Col span={12}><Statistic title={<span style={{ fontSize: 11 }}>气温范围</span>} prefix={<ArrowDownOutlined style={{ color: '#1677ff' }} />} value={minT} suffix={`~ ${maxT}°C`} valueStyle={{ fontSize: 16 }} /></Col>
+                            <Col span={12}><Statistic title={<span style={{ fontSize: 11 }}>降雪总量</span>} value={totalSnow} suffix="mm" valueStyle={{ fontSize: 16, color: '#13c2c2' }} /></Col>
+                          </Row>
+                          <Row>
+                            <Col span={12}><div style={{ fontSize: 11, color: '#8c8c8c' }}>平均风速</div><Text strong style={{ color: '#52c41a' }}>{avgWind} m/s</Text></Col>
+                            <Col span={12}><div style={{ fontSize: 11, color: '#8c8c8c' }}>造雪条件</div>
+                              {minT < -2 && avgWindVal < 15
+                                ? <Tag color="green" style={{ fontSize: 10, margin: 0 }}>极佳</Tag>
+                                : minT < 0 && avgWindVal < 20
+                                  ? <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>良好</Tag>
+                                  : minT < 2 && avgWindVal < 25
+                                    ? <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>一般</Tag>
+                                    : <Tag color="red" style={{ fontSize: 10, margin: 0 }}>不宜</Tag>
+                              }
+                            </Col>
+                          </Row>
+                        </div>
+                      </Col>
+                    )
+                  })}
+                </Row>
+                <ReactECharts option={weatherChartOption} style={{ height: 340 }} notMerge />
+              </div>
+            ) : (
+              <Table<WeatherForecast>
+                size="small"
+                dataSource={weather.slice(0, weatherDays * 24)}
+                columns={[
+                  { title: '日期', dataIndex: 'date', key: 'date', width: 100, fixed: 'left',
+                    render: (d) => <Tag color="blue">{dayjs(d).format('MM-DD ddd')}</Tag> },
+                  { title: '时间', dataIndex: 'time', key: 'time', width: 70 },
+                  { title: '天气', dataIndex: 'weatherCondition', key: 'weatherCondition', width: 80,
+                    render: (w) => <Tag icon={<CloudOutlined />}>{w}</Tag> },
+                  { title: '温度(°C)', dataIndex: 'temperature', key: 'temperature', width: 90,
+                    render: (t) => <Text type={t < -10 ? 'danger' : t < 0 ? 'warning' : 'success'} strong>{t}°</Text> },
+                  { title: '风速', dataIndex: 'windSpeed', key: 'windSpeed', width: 80,
+                    render: (v, r) => <span>{v}m/s <Text type="secondary">({r.windDirection})</Text></span> },
+                  { title: '湿度', dataIndex: 'humidity', key: 'humidity', width: 80, render: (h) => `${h}%` },
+                  { title: '降雪', dataIndex: 'snowfall', key: 'snowfall', width: 80,
+                    render: (s) => s > 0 ? <Text style={{ color: '#1677ff' }} strong>{s} mm/h</Text> : <Text type="secondary">无</Text> },
+                  { title: '能见度', dataIndex: 'visibility', key: 'visibility', width: 90,
+                    render: (v) => <Text type={v < 500 ? 'danger' : v < 1000 ? 'warning' : 'success'}>{v}m</Text> },
+                  { title: '气压', dataIndex: 'pressure', key: 'pressure', width: 80, render: (p) => `${p}hPa` },
+                  { title: '造雪评估', key: 'sRating', width: 100, fixed: 'right',
+                    render: (_, r) => {
+                      const score = (r.temperature <= -5 ? 30 : r.temperature <= -2 ? 20 : r.temperature <= 0 ? 10 : 0)
+                        + (r.humidity >= 70 ? 20 : r.humidity >= 50 ? 10 : 0)
+                        + (r.windSpeed <= 10 ? 25 : r.windSpeed <= 15 ? 15 : r.windSpeed <= 20 ? 5 : 0)
+                        + (r.snowfall > 2 ? 25 : r.snowfall > 0.5 ? 15 : 5)
+                      return <Tag color={score >= 75 ? 'green' : score >= 50 ? 'blue' : score >= 25 ? 'orange' : 'red'}>
+                        {score >= 75 ? '优' : score >= 50 ? '良' : score >= 25 ? '中' : '差'} ({score}分)
+                      </Tag>
                     }
-                  ]}
-                  pagination={{ pageSize: 12, showSizeChanger: false }}
-                  rowKey={r => r.id}
-                  scroll={{ x: 1100 }}
-                />
-              )
-            }}
+                  }
+                ]}
+                pagination={{ pageSize: 12, showSizeChanger: false }}
+                rowKey={r => r.id}
+                scroll={{ x: 1100 }}
+              />
+            )}
           </Card>
         </Col>
       </Row>
