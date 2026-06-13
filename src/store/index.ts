@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type {
   Slope, Device, Coach, Student, CourseBooking, VisitorLocation, DensityAlert,
-  RescueRecord, Rescuer, WorkOrder, SparePart, RepairTeam, StatisticsDaily,
+  RescueRecord, Rescuer, WorkOrder, WorkOrderOperationLog, SparePart, RepairTeam, StatisticsDaily,
   ScheduleTask, WeatherForecast, VisitorForecast, MapHeatPoint, Notification,
   SnowMakingPlan, GroomingPlan, CableCarPlan
 } from '@/types'
@@ -37,6 +37,9 @@ interface AppState {
   currentUser: { name: string; role: string; avatar: string }
   unreadCount: number
 
+  bookingFilter: { approvalStatus?: string; status?: string; date?: string }
+  workOrderFilter: { status?: string; priority?: string }
+
   setCurrentUser: (user: { name: string; role: string; avatar: string }) => void
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
@@ -46,14 +49,19 @@ interface AppState {
   updateBooking: (id: string, updates: Partial<CourseBooking>) => void
   addBooking: (booking: Omit<CourseBooking, 'id'>) => void
   rescheduleBooking: (id: string, updates: Partial<CourseBooking> & { approvalStatus?: 'approved' }) => void
+  setBookingFilter: (filter: { approvalStatus?: string; status?: string; date?: string }) => void
 
   addScheduleTask: (task: Omit<ScheduleTask, 'id' | 'createdAt'>) => void
   updateScheduleApproval: (id: string, approvalStatus: 'approved' | 'rejected') => void
   pushScheduleToTerminal: (scheduleId: string) => boolean
 
-  addWorkOrder: (order: Omit<WorkOrder, 'id' | 'createdAt'>) => void
+  addWorkOrder: (order: Omit<WorkOrder, 'id' | 'createdAt' | 'operationLogs'>) => void
   updateWorkOrder: (id: string, updates: Partial<WorkOrder>) => void
-  assignWorkOrder: (id: string, teamId: string, teamName: string, assignee: string, scheduledDate: string) => void
+  assignWorkOrder: (id: string, teamId: string, teamName: string, assignee: string, scheduledDate: string, note?: string) => void
+  startWorkOrder: (id: string, note?: string) => void
+  completeWorkOrder: (id: string, actualHours: number, note?: string) => void
+  addWorkOrderLog: (id: string, action: WorkOrderOperationLog['action'], operator: string, note?: string) => void
+  setWorkOrderFilter: (filter: { status?: string; priority?: string }) => void
 
   updateRescueRecord: (id: string, updates: Partial<RescueRecord>) => void
   assignRescuers: (rescueId: string, rescuerIds: string[]) => void
@@ -80,6 +88,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   notifications: mockNotifications,
   currentUser: { name: '运营总监-王总', role: '系统管理员', avatar: '王' },
   unreadCount: mockNotifications.filter(n => !n.read).length,
+  bookingFilter: {},
+  workOrderFilter: {},
 
   setCurrentUser: (user) => set({ currentUser: user }),
 
@@ -121,6 +131,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     bookings: state.bookings.map(b => b.id === id ? { ...b, ...updates, status: 'scheduled', approvalStatus: 'approved' } : b)
   })),
 
+  setBookingFilter: (filter) => set({ bookingFilter: filter }),
+
   addScheduleTask: (task) => set(state => ({
     scheduleTasks: [...state.scheduleTasks, {
       ...task,
@@ -140,23 +152,99 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   pushScheduleToTerminal: () => Math.random() > 0.05,
 
-  addWorkOrder: (order) => set(state => ({
-    workOrders: [{
+  addWorkOrder: (order) => set(state => {
+    const currentUser = get().currentUser
+    const newWo: WorkOrder = {
       ...order,
       id: 'wo_' + Date.now().toString(36),
-      createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss')
-    }, ...state.workOrders]
-  })),
+      createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      operationLogs: [{
+        id: 'log_' + Date.now(),
+        action: 'created',
+        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operator: currentUser.name,
+        note: '工单创建'
+      }]
+    }
+    return { workOrders: [newWo, ...state.workOrders] }
+  }),
 
   updateWorkOrder: (id, updates) => set(state => ({
     workOrders: state.workOrders.map(w => w.id === id ? { ...w, ...updates } : w)
   })),
 
-  assignWorkOrder: (id, teamId, teamName, assignee, scheduledDate) => set(state => ({
+  addWorkOrderLog: (id, action, operator, note) => set(state => ({
     workOrders: state.workOrders.map(w => w.id === id ? {
-      ...w, status: 'assigned', teamId, teamName, assignee, scheduledDate
+      ...w,
+      operationLogs: [...w.operationLogs, {
+        id: 'log_' + Date.now(),
+        action,
+        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operator,
+        note
+      }]
     } : w)
   })),
+
+  assignWorkOrder: (id, teamId, teamName, assignee, scheduledDate, note) => set(state => {
+    const currentUser = get().currentUser
+    return {
+      workOrders: state.workOrders.map(w => w.id === id ? {
+        ...w,
+        status: 'assigned',
+        teamId,
+        teamName,
+        assignee,
+        scheduledDate,
+        operationLogs: [...w.operationLogs, {
+          id: 'log_' + Date.now(),
+          action: 'assigned',
+          timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+          operator: currentUser.name,
+          note: note || `派单给 ${teamName}（${assignee}）`
+        }]
+      } : w)
+    }
+  }),
+
+  startWorkOrder: (id, note) => set(state => {
+    const currentUser = get().currentUser
+    return {
+      workOrders: state.workOrders.map(w => w.id === id ? {
+        ...w,
+        status: 'in_progress',
+        startedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operationLogs: [...w.operationLogs, {
+          id: 'log_' + Date.now(),
+          action: 'started',
+          timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+          operator: currentUser.name,
+          note: note || '开始维修作业'
+        }]
+      } : w)
+    }
+  }),
+
+  completeWorkOrder: (id, actualHours, note) => set(state => {
+    const currentUser = get().currentUser
+    return {
+      workOrders: state.workOrders.map(w => w.id === id ? {
+        ...w,
+        status: 'completed',
+        completedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        actualHours,
+        operationLogs: [...w.operationLogs, {
+          id: 'log_' + Date.now(),
+          action: 'completed',
+          timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+          operator: currentUser.name,
+          note: note || `维修完成，耗时 ${actualHours} 小时`
+        }]
+      } : w)
+    }
+  }),
+
+  setWorkOrderFilter: (filter) => set({ workOrderFilter: filter }),
 
   updateRescueRecord: (id, updates) => set(state => ({
     rescueRecords: state.rescueRecords.map(r => r.id === id ? { ...r, ...updates } : r)

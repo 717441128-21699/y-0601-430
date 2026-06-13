@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import {
   Row, Col, Card, Tabs, Table, Tag, Statistic, Progress, Typography, Space, Divider,
   Button, App as AntdApp, Modal, Form, Input, InputNumber, Select, Avatar, List,
@@ -16,7 +16,8 @@ import ReactECharts from 'echarts-for-react'
 import dayjs from 'dayjs'
 import type { ColumnsType } from 'antd/es/table'
 import { useAppStore } from '@/store'
-import type { WorkOrder, SparePart, Device, RepairTeam, DeviceType } from '@/types'
+import type { WorkOrder, SparePart, Device, RepairTeam, DeviceType, WorkOrderOperationLog } from '@/types'
+import { useLocation } from 'react-router-dom'
 
 const { Title, Text, Paragraph } = Typography
 const { Option } = Select
@@ -24,24 +25,45 @@ const { Step } = Steps
 
 const DeviceManagement: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
+  const location = useLocation()
   const {
-    workOrders, spareParts, devices, repairTeams, slopes,
-    updateWorkOrder, addNotification, addWorkOrder
+    workOrders, spareParts, devices, repairTeams, slopes, workOrderFilter,
+    updateWorkOrder, addNotification, addWorkOrder, assignWorkOrder,
+    startWorkOrder, completeWorkOrder, setWorkOrderFilter
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState('workorders')
   const [selectedWO, setSelectedWO] = useState<WorkOrder | null>(null)
   const [woDrawerVisible, setWoDrawerVisible] = useState(false)
   const [assignModal, setAssignModal] = useState<WorkOrder | null>(null)
+  const [startModal, setStartModal] = useState<WorkOrder | null>(null)
+  const [completeModal, setCompleteModal] = useState<WorkOrder | null>(null)
   const [assignForm] = Form.useForm()
+  const [startForm] = Form.useForm()
+  const [completeForm] = Form.useForm()
   const [addWoForm] = Form.useForm()
   const [addWoVisible, setAddWoVisible] = useState(false)
   const [woStatusFilter, setWoStatusFilter] = useState<string>('all')
+  const [woPriorityFilter, setWoPriorityFilter] = useState<string>('all')
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const tab = params.get('tab')
+    if (tab === 'workorders') setActiveTab('workorders')
+    const status = params.get('status')
+    const priority = params.get('priority')
+    if (status) setWoStatusFilter(status)
+    if (priority) setWoPriorityFilter(priority)
+    if (workOrderFilter.status) setWoStatusFilter(workOrderFilter.status)
+    if (workOrderFilter.priority) setWoPriorityFilter(workOrderFilter.priority)
+  }, [location.search, workOrderFilter])
 
   const filteredWorkOrders = useMemo(() => {
-    if (woStatusFilter === 'all') return workOrders
-    return workOrders.filter(w => w.status === woStatusFilter)
-  }, [workOrders, woStatusFilter])
+    let result = [...workOrders]
+    if (woStatusFilter !== 'all') result = result.filter(w => w.status === woStatusFilter)
+    if (woPriorityFilter !== 'all') result = result.filter(w => w.priority === woPriorityFilter)
+    return result
+  }, [workOrders, woStatusFilter, woPriorityFilter])
 
   const urgentCount = workOrders.filter(w => (w.priority === 'urgent' || w.priority === 'high') && w.status !== 'completed').length
   const pendingCount = workOrders.filter(w => w.status === 'pending').length
@@ -167,30 +189,18 @@ const DeviceManagement: React.FC = () => {
           )}
           {r.status === 'assigned' && (
             <Button size="small" type="primary" ghost onClick={() => {
-              updateWorkOrder(r.id, { status: 'in_progress', startedAt: dayjs().format('YYYY-MM-DD HH:mm:ss') })
-              message.success('工单状态已更新为维修中')
-              addNotification({ type: 'info', title: '维修开始', message: `${r.deviceName}维保工单已开始执行` })
+              setStartModal(r)
+              startForm.resetFields()
+              startForm.setFieldsValue({ note: '现场检查完毕，开始维修作业' })
             }}>开始维修</Button>
           )}
           {(r.status === 'in_progress') && (
             <Button size="small" danger ghost onClick={() => {
-              Modal.confirm({
-                title: '确认工单完成',
-                content: (
-                  <div>
-                    <Paragraph>设备：{r.deviceName}</Paragraph>
-                    <Paragraph>确认所有维修工作已完成，设备恢复正常？</Paragraph>
-                  </div>
-                ),
-                onOk: () => {
-                  updateWorkOrder(r.id, {
-                    status: 'completed',
-                    completedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-                    actualHours: r.estimatedHours + Math.floor(Math.random() * 3 - 1)
-                  })
-                  message.success('工单已完成！')
-                  addNotification({ type: 'success', title: '维保工单完成', message: `${r.deviceName}已恢复正常运行` })
-                }
+              setCompleteModal(r)
+              completeForm.resetFields()
+              completeForm.setFieldsValue({
+                actualHours: r.estimatedHours,
+                note: '维修完成，设备测试正常，恢复运行'
               })
             }}>完成</Button>
           )}
@@ -323,16 +333,34 @@ const DeviceManagement: React.FC = () => {
   const handleAssign = (values: any) => {
     if (!assignModal) return
     const team = repairTeams.find(t => t.id === values.teamId)
-    updateWorkOrder(assignModal.id, {
-      status: 'assigned',
-      teamId: values.teamId,
-      teamName: team?.name,
-      assignee: team?.leader,
-      scheduledDate: dayjs(values.scheduledDate).format('YYYY-MM-DD')
-    })
-    message.success(`工单已派发给 ${team?.name}！`)
-    addNotification({ type: 'info', title: '维保工单已派单', message: `${assignModal.deviceName} 工单已分配给 ${team?.name}` })
+    if (!team) return
+    assignWorkOrder(
+      assignModal.id,
+      team.id,
+      team.name,
+      team.leader,
+      dayjs(values.scheduledDate).format('YYYY-MM-DD'),
+      values.note
+    )
+    message.success(`工单已派发给 ${team.name}！`)
+    addNotification({ type: 'info', title: '维保工单已派单', message: `${assignModal.deviceName} 工单已分配给 ${team.name}` })
     setAssignModal(null)
+  }
+
+  const handleStart = (values: any) => {
+    if (!startModal) return
+    startWorkOrder(startModal.id, values.note)
+    message.success('已开始维修')
+    addNotification({ type: 'info', title: '维修开始', message: `${startModal.deviceName}维保工单已开始执行` })
+    setStartModal(null)
+  }
+
+  const handleComplete = (values: any) => {
+    if (!completeModal) return
+    completeWorkOrder(completeModal.id, values.actualHours, values.note)
+    message.success('工单已完成！')
+    addNotification({ type: 'success', title: '维保工单完成', message: `${completeModal.deviceName}已恢复正常运行` })
+    setCompleteModal(null)
   }
 
   const handleDeviceSelect = (deviceId: string) => {
@@ -426,14 +454,36 @@ const DeviceManagement: React.FC = () => {
         activeTabKey={activeTab} onTabChange={setActiveTab}
         tabBarExtraContent={activeTab === 'workorders' ? (
           <Space>
-            <Radio.Group value={woStatusFilter} onChange={(e) => setWoStatusFilter(e.target.value)} size="small">
+            <Radio.Group value={woStatusFilter} onChange={(e) => {
+              setWoStatusFilter(e.target.value)
+              setWorkOrderFilter({ ...workOrderFilter, status: e.target.value === 'all' ? undefined : e.target.value })
+            }} size="small">
               <Radio.Button value="all">全部状态</Radio.Button>
               <Radio.Button value="pending">待派单</Radio.Button>
               <Radio.Button value="assigned">已派单</Radio.Button>
               <Radio.Button value="in_progress">维修中</Radio.Button>
               <Radio.Button value="completed">已完成</Radio.Button>
             </Radio.Group>
-            <Button icon={<ReloadOutlined />} size="small">刷新</Button>
+            <Select
+              value={woPriorityFilter}
+              style={{ width: 110 }}
+              size="small"
+              onChange={(v) => {
+                setWoPriorityFilter(v)
+                setWorkOrderFilter({ ...workOrderFilter, priority: v === 'all' ? undefined : v })
+              }}
+            >
+              <Option value="all">全部优先级</Option>
+              <Option value="urgent">紧急</Option>
+              <Option value="high">高优</Option>
+              <Option value="medium">中</Option>
+              <Option value="low">低</Option>
+            </Select>
+            <Button icon={<ReloadOutlined />} size="small" onClick={() => {
+              setWoStatusFilter('all')
+              setWoPriorityFilter('all')
+              setWorkOrderFilter({})
+            }}>重置</Button>
             <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { addWoForm.resetFields(); setAddWoVisible(true) }}>创建工单</Button>
           </Space>
         ) : activeTab === 'spareparts' ? (
@@ -541,30 +591,25 @@ const DeviceManagement: React.FC = () => {
 
       <Drawer
         title={selectedWO ? `工单详情 - ${selectedWO.id.toUpperCase()}` : '工单详情'}
-        width={600}
+        width={680}
         open={woDrawerVisible}
         onClose={() => setWoDrawerVisible(false)}
         extra={selectedWO ? (
           <Space>
             {selectedWO.status === 'pending' && <Button type="primary" onClick={() => { setAssignModal(selectedWO); assignForm.resetFields() }}>派单</Button>}
             {selectedWO.status === 'assigned' && <Button type="primary" onClick={() => {
-              updateWorkOrder(selectedWO.id, { status: 'in_progress', startedAt: dayjs().format('YYYY-MM-DD HH:mm:ss') })
-              message.success('已开始维修')
+              setStartModal(selectedWO)
+              startForm.resetFields()
+              startForm.setFieldsValue({ note: '现场检查完毕，开始维修作业' })
             }}>开始维修</Button>}
-            {(selectedWO.status === 'in_progress' || selectedWO.status === 'assigned') && (
-              <Button danger onClick={() => {
-                Modal.confirm({
-                  title: '确认工单完成',
-                  onOk: () => {
-                    updateWorkOrder(selectedWO.id, {
-                      status: 'completed',
-                      completedAt: dayjs().format('YYYY-MM-DD HH:mm:ss')
-                    })
-                    message.success('工单完成！')
-                  }
-                })
-              }}>完成</Button>
-            )}
+            {selectedWO.status === 'in_progress' && <Button danger onClick={() => {
+              setCompleteModal(selectedWO)
+              completeForm.resetFields()
+              completeForm.setFieldsValue({
+                actualHours: selectedWO.estimatedHours,
+                note: '维修完成，设备测试正常，恢复运行'
+              })
+            }}>完成</Button>}
           </Space>
         ) : null}
       >
@@ -592,7 +637,7 @@ const DeviceManagement: React.FC = () => {
 
             <Divider orientation="left" style={{ marginTop: 16 }}>工单信息</Divider>
             <Descriptions size="small" column={1} bordered>
-              <Descriptions.Item label="设备">{selectedWO.deviceName}</Descriptions.Item>
+              <Descriptions.Item label="设备">{selectedWO.deviceName} <Tag color="blue">{selectedWO.location}</Tag></Descriptions.Item>
               <Descriptions.Item label="类型">
                 {selectedWO.type === 'preventive' ? <Tag color="blue">预防性维保</Tag> :
                   selectedWO.type === 'corrective' ? <Tag color="orange">纠正性维修</Tag> :
@@ -619,27 +664,100 @@ const DeviceManagement: React.FC = () => {
                   </Space>
                 ) : <Text type="secondary">无需备件</Text>}
               </Descriptions.Item>
-              {selectedWO.notes && <Descriptions.Item label="备注">{selectedWO.notes}</Descriptions.Item>}
             </Descriptions>
 
-            <Divider orientation="left" style={{ marginTop: 16 }}>流程进度</Divider>
-            <Steps size="small" current={['pending', 'assigned', 'in_progress', 'completed'].indexOf(selectedWO.status)}>
-              <Step title="创建工单" description={selectedWO.createdAt.slice(11)} icon={<FileTextOutlined />} />
-              <Step title="班组派单" description={selectedWO.teamName ? `${selectedWO.teamName} ${selectedWO.scheduledDate || ''}` : '待处理'} icon={<TeamOutlined />} />
-              <Step title="开始维修" description={selectedWO.startedAt || '待开始'} icon={<PlayCircleOutlined />} />
-              <Step title="维修完成" description={selectedWO.completedAt || '进行中'} icon={<CheckCircleOutlined />} />
-            </Steps>
+            <Divider orientation="left" style={{ marginTop: 16 }}>流转记录</Divider>
+            <Timeline mode="left" style={{ marginTop: 8 }}>
+              {selectedWO.operationLogs.slice().reverse().map((log: WorkOrderOperationLog) => {
+                const actionMap: Record<string, { color: string; text: string; icon?: React.ReactNode }> = {
+                  created: { color: 'blue', text: '工单创建', icon: <FileTextOutlined /> },
+                  assigned: { color: 'purple', text: '班组派单', icon: <TeamOutlined /> },
+                  started: { color: 'cyan', text: '开始维修', icon: <PlayCircleOutlined /> },
+                  completed: { color: 'green', text: '维修完成', icon: <CheckCircleOutlined /> },
+                  note: { color: 'gray', text: '添加备注', icon: <EditOutlined /> }
+                }
+                const info = actionMap[log.action] || { color: 'gray', text: log.action }
+                return (
+                  <Timeline.Item
+                    key={log.id}
+                    label={log.timestamp}
+                    color={info.color}
+                    dot={info.icon}
+                  >
+                    <div>
+                      <Text strong>{info.text}</Text>
+                      <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>操作人：{log.operator}</Text>
+                      {log.note && <Paragraph style={{ margin: '4px 0 0', fontSize: 13 }}>{log.note}</Paragraph>}
+                    </div>
+                  </Timeline.Item>
+                )
+              })}
+            </Timeline>
 
-            {selectedWO.status === 'completed' && (
-              <Timeline mode="left" style={{ marginTop: 16 }}>
-                <Timeline.Item label={selectedWO.createdAt.slice(11)} color="blue">工单创建：{selectedWO.description}</Timeline.Item>
-                {selectedWO.assignee && <Timeline.Item color="purple">派单给 {selectedWO.teamName}（{selectedWO.assignee}）</Timeline.Item>}
-                {selectedWO.startedAt && <Timeline.Item label={selectedWO.startedAt.slice(11)} color="cyan">开始维修作业</Timeline.Item>}
-                {selectedWO.completedAt && <Timeline.Item label={selectedWO.completedAt.slice(11)} color="green" dot={<CheckCircleOutlined />}>
-                  维修完成，设备恢复正常运行
-                </Timeline.Item>}
-              </Timeline>
-            )}
+            <Divider orientation="left" style={{ marginTop: 16 }}>设备档案</Divider>
+            {(() => {
+              const device = devices.find(d => d.id === selectedWO.deviceId)
+              const deviceWorkOrders = workOrders.filter(w => w.deviceId === selectedWO.deviceId && w.id !== selectedWO.id).slice(0, 5)
+              const relatedParts = spareParts.filter(p => p.compatibleDevices.includes(selectedWO.deviceType))
+              if (!device) return <Empty description="设备信息不存在" />
+              return (
+                <div>
+                  <Card size="small" style={{ marginBottom: 12 }}>
+                    <Descriptions size="small" column={2}>
+                      <Descriptions.Item label="设备编号">{device.id}</Descriptions.Item>
+                      <Descriptions.Item label="设备类型">
+                        {({ snowmaker: '造雪机', cablecar: '缆车', magicarpet: '魔毯', snowgroomer: '压雪车' } as Record<DeviceType, string>)[device.type]}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="当前状态">
+                        <Tag color={device.status === 'running' ? 'green' : device.status === 'warning' ? 'orange' : device.status === 'fault' ? 'red' : 'default'}>
+                          {device.status === 'running' ? '运行中' : device.status === 'warning' ? '告警' : device.status === 'fault' ? '故障' : device.status === 'maintenance' ? '维保中' : '停机'}
+                        </Tag>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="位置">{device.location}</Descriptions.Item>
+                      <Descriptions.Item label="已运行">
+                        <Progress percent={Math.min(100, device.runHours / device.maintenanceInterval * 100)} size="small"
+                          format={() => `${device.runHours}/${device.maintenanceInterval}h`} />
+                      </Descriptions.Item>
+                      <Descriptions.Item label="上次维保">{device.lastMaintenance}</Descriptions.Item>
+                    </Descriptions>
+                    {device.warningMessage && (
+                      <Alert type="warning" showIcon message={device.warningMessage} style={{ marginTop: 8, padding: '4px 8px' }} />
+                    )}
+                  </Card>
+
+                  <Title level={5} style={{ fontSize: 13, margin: '0 0 8px' }}><HistoryOutlined /> 最近维修记录</Title>
+                  {deviceWorkOrders.length > 0 ? (
+                    <List size="small" dataSource={deviceWorkOrders} renderItem={(w) => (
+                      <List.Item style={{ padding: '6px 0', borderBottom: '1px dashed #f0f0f0' }}>
+                        <List.Item.Meta
+                          title={<Text style={{ fontSize: 12 }}>{w.createdAt.slice(5)} - {w.type === 'preventive' ? '预防性' : w.type === 'corrective' ? '纠正性' : '紧急'}</Text>}
+                          description={<Text type="secondary" style={{ fontSize: 11 }}>{w.description.slice(0, 30)}...</Text>}
+                        />
+                        <Tag color={w.status === 'completed' ? 'green' : w.status === 'in_progress' ? 'blue' : 'orange'} style={{ fontSize: 10 }}>
+                          {w.status === 'completed' ? '完成' : w.status === 'in_progress' ? '进行中' : w.status === 'assigned' ? '已派单' : '待处理'}
+                        </Tag>
+                      </List.Item>
+                    )} />
+                  ) : <Empty description="暂无历史维修记录" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 12 }} />}
+
+                  <Title level={5} style={{ fontSize: 13, margin: '16px 0 8px' }}><ContainerOutlined /> 相关备件库存</Title>
+                  {relatedParts.length > 0 ? (
+                    <List size="small" dataSource={relatedParts.slice(0, 6)} renderItem={(p) => (
+                      <List.Item style={{ padding: '6px 0', borderBottom: '1px dashed #f0f0f0' }}>
+                        <List.Item.Meta
+                          title={<Text style={{ fontSize: 12 }}>{p.name}</Text>}
+                          description={<Text type="secondary" style={{ fontSize: 11 }}>库位：{p.location}</Text>}
+                        />
+                        <Space>
+                          {p.stock < p.safeStock && <Tag color="red" style={{ fontSize: 10 }}>库存预警</Tag>}
+                          <Text style={{ fontSize: 12, color: p.stock < p.safeStock ? '#ff4d4f' : '#52c41a' }} strong>{p.stock}/{p.safeStock}{p.unit}</Text>
+                        </Space>
+                      </List.Item>
+                    )} />
+                  ) : <Empty description="暂无相关备件" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 12 }} />}
+                </div>
+              )
+            })()}
           </div>
         ) : <Empty />}
       </Drawer>
@@ -689,6 +807,9 @@ const DeviceManagement: React.FC = () => {
                   </Form.Item>
                 </Col>
               </Row>
+              <Form.Item label="派单备注" name="note">
+                <Input.TextArea rows={2} placeholder="填写派单说明或注意事项" />
+              </Form.Item>
               <Divider style={{ margin: '6px 0 12px' }} />
               <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
                 <Space>
@@ -787,6 +908,65 @@ const DeviceManagement: React.FC = () => {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={<Space><PlayCircleOutlined style={{ color: '#1677ff' }} /> 开始维修作业</Space>}
+        open={!!startModal}
+        onCancel={() => setStartModal(null)}
+        footer={null}
+        width={480}
+      >
+        {startModal && (
+          <div>
+            <Alert type="info" showIcon style={{ marginBottom: 16 }}
+              message="工单信息"
+              description={`${startModal.deviceName} - ${startModal.description.slice(0, 40)}...`}
+            />
+            <Form form={startForm} layout="vertical" onFinish={handleStart}>
+              <Form.Item label="现场情况/开始备注" name="note">
+                <Input.TextArea rows={3} placeholder="请描述现场检查情况或维修注意事项" />
+              </Form.Item>
+              <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
+                <Space>
+                  <Button onClick={() => setStartModal(null)}>取消</Button>
+                  <Button type="primary" htmlType="submit" icon={<PlayCircleOutlined />}>确认开始</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={<Space><CheckCircleOutlined style={{ color: '#52c41a' }} /> 完成维修作业</Space>}
+        open={!!completeModal}
+        onCancel={() => setCompleteModal(null)}
+        footer={null}
+        width={480}
+      >
+        {completeModal && (
+          <div>
+            <Alert type="success" showIcon style={{ marginBottom: 16 }}
+              message="工单信息"
+              description={`${completeModal.deviceName} - 预估工时 ${completeModal.estimatedHours} 小时`}
+            />
+            <Form form={completeForm} layout="vertical" onFinish={handleComplete}>
+              <Form.Item label="实际工时" name="actualHours" rules={[{ required: true, message: '请填写实际工时' }]}>
+                <InputNumber min={0} step={0.5} style={{ width: '100%' }} addonAfter="小时" />
+              </Form.Item>
+              <Form.Item label="维修完成情况" name="note">
+                <Input.TextArea rows={3} placeholder="请描述维修内容、更换备件、设备现状等" />
+              </Form.Item>
+              <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
+                <Space>
+                  <Button onClick={() => setCompleteModal(null)}>取消</Button>
+                  <Button type="primary" htmlType="submit" icon={<CheckCircleOutlined />}>确认完成</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </div>
+        )}
       </Modal>
     </div>
   )

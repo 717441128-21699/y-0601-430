@@ -232,6 +232,14 @@ export interface Rescuer {
   responseTimeAvg: number
 }
 
+export interface WorkOrderOperationLog {
+  id: string
+  action: 'created' | 'assigned' | 'started' | 'completed' | 'cancelled' | 'note'
+  timestamp: string
+  operator: string
+  note?: string
+}
+
 export interface WorkOrder {
   id: string
   deviceId: string
@@ -254,6 +262,7 @@ export interface WorkOrder {
   actualHours?: number
   partsRequired: PartRequirement[]
   notes?: string
+  operationLogs: WorkOrderOperationLog[]
 }
 
 export interface PartRequirement {

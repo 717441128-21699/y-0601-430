@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import {
   Row, Col, Card, Tabs, Table, Tag, Statistic, Progress, Typography, Space, Divider,
   Button, App as AntdApp, Modal, Form, Input, InputNumber, Select, Avatar, List,
@@ -16,6 +16,7 @@ import dayjs from 'dayjs'
 import type { ColumnsType } from 'antd/es/table'
 import { useAppStore } from '@/store'
 import type { Coach, CourseBooking, DifficultyLevel, CoachLevel } from '@/types'
+import { useLocation } from 'react-router-dom'
 
 const { Title, Text, Paragraph } = Typography
 const { Option } = Select
@@ -36,9 +37,10 @@ const statusNameMap: Record<string, string> = {
 
 const CoachManagement: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
+  const location = useLocation()
   const {
-    coaches, students, bookings, slopes,
-    updateBookingApproval, addBooking, addNotification, rescheduleBooking
+    coaches, students, bookings, slopes, bookingFilter,
+    updateBookingApproval, addBooking, addNotification, rescheduleBooking, setBookingFilter
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState('schedule')
@@ -48,10 +50,30 @@ const CoachManagement: React.FC = () => {
   const [rescheduleModal, setRescheduleModal] = useState<CourseBooking | null>(null)
   const [rescheduleForm] = Form.useForm()
   const [bookingForm] = Form.useForm()
+  const [filterDate, setFilterDate] = useState<string | null>(null)
+  const [filterApproval, setFilterApproval] = useState<string | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const tab = params.get('tab')
+    if (tab === 'approvals') setActiveTab('approvals')
+    else if (tab === 'schedules') setActiveTab('schedule')
+
+    if (bookingFilter.date) setFilterDate(bookingFilter.date)
+    if (bookingFilter.approvalStatus) setFilterApproval(bookingFilter.approvalStatus)
+  }, [location.search, bookingFilter])
 
   const today = dayjs().format('YYYY-MM-DD')
-  const todayBookings = useMemo(() => bookings.filter(b => b.date === today), [bookings, today])
-  const pendingBookings = useMemo(() => bookings.filter(b => b.approvalStatus === 'pending'), [bookings])
+
+  const filteredBookings = useMemo(() => {
+    let result = [...bookings]
+    if (filterDate) result = result.filter(b => b.date === filterDate)
+    if (filterApproval) result = result.filter(b => b.approvalStatus === filterApproval)
+    return result
+  }, [bookings, filterDate, filterApproval])
+
+  const todayBookings = useMemo(() => filteredBookings.filter(b => b.date === (filterDate || today)), [filteredBookings, filterDate, today])
+  const pendingBookings = useMemo(() => filteredBookings.filter(b => b.approvalStatus === 'pending'), [filteredBookings])
 
   const handleApprove = (b: CourseBooking) => {
     modal.confirm({
@@ -339,12 +361,49 @@ const CoachManagement: React.FC = () => {
         tabBarExtraContent={
           activeTab === 'bookings' ? (
             <Space>
-              <Button icon={<ReloadOutlined />}>刷新</Button>
+              <DatePicker
+                value={filterDate ? dayjs(filterDate) : null}
+                placeholder="选择日期"
+                style={{ width: 150 }}
+                onChange={(d) => {
+                  const date = d ? dayjs(d).format('YYYY-MM-DD') : null
+                  setFilterDate(date)
+                  setBookingFilter({ ...bookingFilter, date: date || undefined })
+                }}
+                allowClear
+              />
+              <Select
+                value={filterApproval || 'all'}
+                style={{ width: 130 }}
+                onChange={(v) => {
+                  const val = v === 'all' ? null : v
+                  setFilterApproval(val)
+                  setBookingFilter({ ...bookingFilter, approvalStatus: val || undefined })
+                }}
+              >
+                <Option value="all">全部状态</Option>
+                <Option value="pending">待审批</Option>
+                <Option value="approved">已批准</Option>
+                <Option value="rejected">已拒绝</Option>
+              </Select>
+              <Button icon={<ReloadOutlined />} onClick={() => {
+                setFilterDate(null)
+                setFilterApproval(null)
+                setBookingFilter({})
+              }}>重置</Button>
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddBookingVisible(true)}>新建预约</Button>
             </Space>
           ) : activeTab === 'schedule' ? (
             <Space>
-              <DatePicker defaultValue={dayjs()} style={{ width: 160 }} />
+              <DatePicker
+                defaultValue={dayjs()}
+                style={{ width: 160 }}
+                onChange={(d) => {
+                  const date = d ? dayjs(d).format('YYYY-MM-DD') : null
+                  setFilterDate(date)
+                  setBookingFilter({ ...bookingFilter, date: date || undefined })
+                }}
+              />
               <Select defaultValue="all" style={{ width: 120 }} size="small">
                 <Option value="all">全部等级</Option>
                 <Option value="L5">国际级L5</Option>
@@ -392,7 +451,7 @@ const CoachManagement: React.FC = () => {
             )}
             <Table<CourseBooking>
               size="middle"
-              dataSource={bookings}
+              dataSource={filteredBookings}
               columns={bookingColumns}
               rowKey="id"
               scroll={{ x: 1400 }}

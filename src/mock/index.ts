@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 import type {
   WeatherForecast, VisitorForecast, Slope, Device, Coach, Student,
   CourseBooking, VisitorLocation, DensityAlert, RescueRecord, Rescuer,
-  WorkOrder, SparePart, RepairTeam, StatisticsDaily, ScheduleTask,
+  WorkOrder, WorkOrderOperationLog, SparePart, RepairTeam, StatisticsDaily, ScheduleTask,
   MapHeatPoint, Notification
 } from '@/types'
 
@@ -213,12 +213,41 @@ export const mockRepairTeams: RepairTeam[] = [
 ]
 
 export const mockWorkOrders: WorkOrder[] = [
-  { id: 'wo1', deviceId: 'd13', deviceName: '缆车E线', deviceType: 'cablecar', type: 'emergency', priority: 'urgent', status: 'in_progress', description: '牵引机构异常噪音，减速箱疑似故障，影响高级道3号运营', teamId: 't3', teamName: '索道专业组', assignee: '郑主管', createdAt: dayjs().subtract(3, 'hour').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: today, startedAt: dayjs().subtract(2, 'hour').format('YYYY-MM-DD HH:mm:ss'), estimatedHours: 8, location: '高级道3号', reporter: '巡检员-王', partsRequired: [{ partId: 'p5', partName: '减速箱轴承', quantity: 2, fulfilled: true }, { partId: 'p6', partName: '牵引轮衬垫', quantity: 4, fulfilled: true }] },
-  { id: 'wo2', deviceId: 'd3', deviceName: '造雪机I1-01', deviceType: 'snowmaker', type: 'preventive', priority: 'high', status: 'assigned', description: '运行时间达到维保阈值，需要更换滤芯和润滑保养', teamId: 't1', teamName: '机电一班', assignee: '钱工', createdAt: dayjs().subtract(5, 'hour').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: today, estimatedHours: 3, location: '中级道上段', reporter: '系统自动', partsRequired: [{ partId: 'p1', partName: '水滤芯', quantity: 2, fulfilled: true }, { partId: 'p2', partName: '空气滤芯', quantity: 1, fulfilled: true }] },
-  { id: 'wo3', deviceId: 'd8', deviceName: '造雪机P1-01', deviceType: 'snowmaker', type: 'preventive', priority: 'medium', status: 'in_progress', description: '计划维保：液压系统检测+喷嘴清洗校准', teamId: 't1', teamName: '机电一班', assignee: '孙技工', createdAt: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: today, startedAt: dayjs().subtract(4, 'hour').format('YYYY-MM-DD HH:mm:ss'), estimatedHours: 5, location: '地形公园', reporter: '系统自动', partsRequired: [{ partId: 'p3', partName: '喷嘴组', quantity: 12, fulfilled: true }, { partId: 'p4', partName: '液压油', quantity: 20, fulfilled: true }] },
-  { id: 'wo4', deviceId: 'd19', deviceName: '压雪车3号', deviceType: 'snowgroomer', type: 'preventive', priority: 'high', status: 'pending', description: '即将到达保养里程，需进行全面保养', createdAt: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: tomorrow, estimatedHours: 6, location: '车库', reporter: '系统自动', partsRequired: [{ partId: 'p7', partName: '发动机机油', quantity: 30, fulfilled: false }, { partId: 'p8', partName: '履带螺栓', quantity: 40, fulfilled: true }] },
-  { id: 'wo5', deviceId: 'd16', deviceName: '魔毯3号', deviceType: 'magicarpet', type: 'corrective', priority: 'medium', status: 'pending', description: '皮带张紧器异响，需要检查调整或更换', createdAt: dayjs().subtract(30, 'minute').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: tomorrow, estimatedHours: 2, location: '教学道', reporter: '教练-李', partsRequired: [{ partId: 'p9', partName: '张紧器总成', quantity: 1, fulfilled: false }] },
-  { id: 'wo6', deviceId: 'd10', deviceName: '缆车B线', deviceType: 'cablecar', type: 'preventive', priority: 'low', status: 'pending', description: '月度例行：缆绳探伤+抱索器检查', createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss'), scheduledDate: dayjs().add(3, 'day').format('YYYY-MM-DD'), estimatedHours: 4, location: '中级道1号', reporter: '系统自动', partsRequired: [] }
+  { id: 'wo1', deviceId: 'd13', deviceName: '缆车E线', deviceType: 'cablecar', type: 'emergency', priority: 'urgent', status: 'in_progress', description: '牵引机构异常噪音，减速箱疑似故障，影响高级道3号运营', teamId: 't3', teamName: '索道专业组', assignee: '郑主管', createdAt: dayjs().subtract(3, 'hour').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: today, startedAt: dayjs().subtract(2, 'hour').format('YYYY-MM-DD HH:mm:ss'), estimatedHours: 8, location: '高级道3号', reporter: '巡检员-王', partsRequired: [{ partId: 'p5', partName: '减速箱轴承', quantity: 2, fulfilled: true }, { partId: 'p6', partName: '牵引轮衬垫', quantity: 4, fulfilled: true }],
+    operationLogs: [
+      { id: 'wo1_log1', action: 'created', timestamp: dayjs().subtract(3, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '巡检员-王', note: '现场发现牵引机构异响，紧急报修' },
+      { id: 'wo1_log2', action: 'assigned', timestamp: dayjs().subtract(2.5, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '运营总监-王总', note: '紧急派单给索道专业组，要求优先处理' },
+      { id: 'wo1_log3', action: 'started', timestamp: dayjs().subtract(2, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '郑主管', note: '已到达现场，开始拆解检查' }
+    ]
+  },
+  { id: 'wo2', deviceId: 'd3', deviceName: '造雪机I1-01', deviceType: 'snowmaker', type: 'preventive', priority: 'high', status: 'assigned', description: '运行时间达到维保阈值，需要更换滤芯和润滑保养', teamId: 't1', teamName: '机电一班', assignee: '钱工', createdAt: dayjs().subtract(5, 'hour').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: today, estimatedHours: 3, location: '中级道上段', reporter: '系统自动', partsRequired: [{ partId: 'p1', partName: '水滤芯', quantity: 2, fulfilled: true }, { partId: 'p2', partName: '空气滤芯', quantity: 1, fulfilled: true }],
+    operationLogs: [
+      { id: 'wo2_log1', action: 'created', timestamp: dayjs().subtract(5, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '系统自动', note: '运行时长触发维保提醒' },
+      { id: 'wo2_log2', action: 'assigned', timestamp: dayjs().subtract(4, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '运营总监-王总', note: '安排白班处理，备件已备好' }
+    ]
+  },
+  { id: 'wo3', deviceId: 'd8', deviceName: '造雪机P1-01', deviceType: 'snowmaker', type: 'preventive', priority: 'medium', status: 'in_progress', description: '计划维保：液压系统检测+喷嘴清洗校准', teamId: 't1', teamName: '机电一班', assignee: '孙技工', createdAt: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: today, startedAt: dayjs().subtract(4, 'hour').format('YYYY-MM-DD HH:mm:ss'), estimatedHours: 5, location: '地形公园', reporter: '系统自动', partsRequired: [{ partId: 'p3', partName: '喷嘴组', quantity: 12, fulfilled: true }, { partId: 'p4', partName: '液压油', quantity: 20, fulfilled: true }],
+    operationLogs: [
+      { id: 'wo3_log1', action: 'created', timestamp: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'), operator: '系统自动', note: '月度计划维保任务生成' },
+      { id: 'wo3_log2', action: 'assigned', timestamp: dayjs().subtract(1, 'day').add(2, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '运营总监-王总', note: '按计划执行' },
+      { id: 'wo3_log3', action: 'started', timestamp: dayjs().subtract(4, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '孙技工', note: '开始作业，先进行液压油检测' }
+    ]
+  },
+  { id: 'wo4', deviceId: 'd19', deviceName: '压雪车3号', deviceType: 'snowgroomer', type: 'preventive', priority: 'high', status: 'pending', description: '即将到达保养里程，需进行全面保养', createdAt: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: tomorrow, estimatedHours: 6, location: '车库', reporter: '系统自动', partsRequired: [{ partId: 'p7', partName: '发动机机油', quantity: 30, fulfilled: false }, { partId: 'p8', partName: '履带螺栓', quantity: 40, fulfilled: true }],
+    operationLogs: [
+      { id: 'wo4_log1', action: 'created', timestamp: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'), operator: '系统自动', note: '保养里程触发，等待派单' }
+    ]
+  },
+  { id: 'wo5', deviceId: 'd16', deviceName: '魔毯3号', deviceType: 'magicarpet', type: 'corrective', priority: 'medium', status: 'pending', description: '皮带张紧器异响，需要检查调整或更换', createdAt: dayjs().subtract(30, 'minute').format('YYYY-MM-DD HH:mm:ss'), scheduledDate: tomorrow, estimatedHours: 2, location: '教学道', reporter: '教练-李', partsRequired: [{ partId: 'p9', partName: '张紧器总成', quantity: 1, fulfilled: false }],
+    operationLogs: [
+      { id: 'wo5_log1', action: 'created', timestamp: dayjs().subtract(30, 'minute').format('YYYY-MM-DD HH:mm:ss'), operator: '教练-李', note: '教学时听到异常声响，已暂停使用' }
+    ]
+  },
+  { id: 'wo6', deviceId: 'd10', deviceName: '缆车B线', deviceType: 'cablecar', type: 'preventive', priority: 'low', status: 'pending', description: '月度例行：缆绳探伤+抱索器检查', createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss'), scheduledDate: dayjs().add(3, 'day').format('YYYY-MM-DD'), estimatedHours: 4, location: '中级道1号', reporter: '系统自动', partsRequired: [],
+    operationLogs: [
+      { id: 'wo6_log1', action: 'created', timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'), operator: '系统自动', note: '月度例行检查任务生成' }
+    ]
+  }
 ]
 
 export const mockSpareParts: SparePart[] = [

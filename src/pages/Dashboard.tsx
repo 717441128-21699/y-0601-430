@@ -10,6 +10,7 @@ import ReactECharts from 'echarts-for-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store'
 import type { Slope, Device, DensityAlert, RescueRecord, WorkOrder, ScheduleTask } from '@/types'
+import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
 
@@ -40,14 +41,18 @@ const Dashboard: React.FC = () => {
   const { message } = AntdApp.useApp()
   const {
     slopes, devices, weather, statistics, densityAlerts, rescueRecords,
-    workOrders, scheduleTasks, coaches, bookings, spareParts
+    workOrders, scheduleTasks, coaches, bookings, spareParts,
+    setBookingFilter, setWorkOrderFilter
   } = useAppStore()
 
+  const today = dayjs().format('YYYY-MM-DD')
   const coachCount = coaches.length
-  const bookingCount = bookings.length
 
-  const pendingBookings = bookings.filter(b => b.approvalStatus === 'pending')
-  const inProgressBookings = bookings.filter(b => b.status === 'in_progress')
+  const todayBookings = bookings.filter(b => b.date === today)
+  const bookingCount = todayBookings.filter(b => b.approvalStatus === 'approved' || b.status === 'in_progress' || b.status === 'completed').length
+
+  const pendingBookings = todayBookings.filter(b => b.approvalStatus === 'pending')
+  const inProgressBookings = todayBookings.filter(b => b.status === 'in_progress')
   const lowStockParts = spareParts.filter(p => p.stock < p.safeStock)
 
   const todayStats = statistics[statistics.length - 1]
@@ -404,9 +409,16 @@ const Dashboard: React.FC = () => {
                 <List.Item style={{ padding: '6px 0', cursor: 'pointer', borderBottom: '1px dashed #f0f0f0' }}
                   onClick={() => {
                     if (item.type === 'rescue' || item.type === 'alert') navigate('/safety')
-                    else if (item.type === 'workorder') navigate('/device')
+                    else if (item.type === 'workorder') {
+                      const wo = item.obj as WorkOrder
+                      setWorkOrderFilter({ priority: wo.priority })
+                      navigate(`/device?tab=workorders&priority=${wo.priority}`)
+                    }
                     else if (item.type === 'schedule') navigate('/schedule')
-                    else if (item.type === 'booking') navigate('/coach')
+                    else if (item.type === 'booking') {
+                      setBookingFilter({ approvalStatus: 'pending' })
+                      navigate('/coach?tab=approvals')
+                    }
                     message.info('已跳转到对应模块')
                   }}>
                   <List.Item.Meta
@@ -487,7 +499,10 @@ const Dashboard: React.FC = () => {
             title={<Space><TeamOutlined style={{ color: '#52c41a' }} />教练排班概况</Space>}
             extra={<Tag color="green">今日</Tag>}
             hoverable
-            onClick={() => navigate('/coach')}
+            onClick={() => {
+              setBookingFilter({ date: today, approvalStatus: 'pending' })
+              navigate('/coach?tab=approvals')
+            }}
           >
             <Statistic
               title={<Text type="secondary" style={{ fontSize: 12 }}>在岗教练</Text>}
@@ -499,12 +514,24 @@ const Dashboard: React.FC = () => {
             <Divider style={{ margin: '6px 0 10px' }} />
             <Row gutter={[8, 8]}>
               <Col span={12}>
-                <Statistic title={<span style={{ fontSize: 11 }}>今日课时</span>} value={bookingCount} valueStyle={{ fontSize: 18 }} />
+                <div style={{ cursor: 'pointer' }} onClick={(e) => {
+                  e.stopPropagation()
+                  setBookingFilter({ date: today })
+                  navigate('/coach?tab=schedules')
+                }}>
+                  <Statistic title={<span style={{ fontSize: 11 }}>今日课时</span>} value={bookingCount} valueStyle={{ fontSize: 18 }} />
+                </div>
               </Col>
               <Col span={12}>
-                <Statistic title={<span style={{ fontSize: 11 }}>待审批</span>}
-                  value={pendingBookings.length}
-                  valueStyle={{ fontSize: 18, color: '#fa8c16' }} />
+                <div style={{ cursor: 'pointer' }} onClick={(e) => {
+                  e.stopPropagation()
+                  setBookingFilter({ date: today, approvalStatus: 'pending' })
+                  navigate('/coach?tab=approvals')
+                }}>
+                  <Statistic title={<span style={{ fontSize: 11 }}>待审批</span>}
+                    value={pendingBookings.length}
+                    valueStyle={{ fontSize: 18, color: '#fa8c16' }} />
+                </div>
               </Col>
             </Row>
             <Divider style={{ margin: '10px 0' }} />
@@ -531,12 +558,39 @@ const Dashboard: React.FC = () => {
             title={<Space><ToolOutlined style={{ color: '#faad14' }} />维保工单 & 库存</Space>}
             extra={<Tag color="orange">进行中{workOrders.filter(w => w.status === 'in_progress').length}</Tag>}
             hoverable
-            onClick={() => navigate('/device')}
+            onClick={() => {
+              setWorkOrderFilter({ priority: 'high' })
+              navigate('/device?tab=workorders&priority=high')
+            }}
           >
             <Row gutter={[8, 8]}>
-              <Col span={8}><Statistic title={<span style={{ fontSize: 11 }}>紧急</span>} value={workOrders.filter(w => w.priority === 'urgent').length} valueStyle={{ fontSize: 18, color: '#ff4d4f' }} /></Col>
-              <Col span={8}><Statistic title={<span style={{ fontSize: 11 }}>高优</span>} value={workOrders.filter(w => w.priority === 'high').length} valueStyle={{ fontSize: 18, color: '#fa8c16' }} /></Col>
-              <Col span={8}><Statistic title={<span style={{ fontSize: 11 }}>待派</span>} value={workOrders.filter(w => w.status === 'pending').length} valueStyle={{ fontSize: 18, color: '#1677ff' }} /></Col>
+              <Col span={8}>
+                <div style={{ cursor: 'pointer' }} onClick={(e) => {
+                  e.stopPropagation()
+                  setWorkOrderFilter({ priority: 'urgent' })
+                  navigate('/device?tab=workorders&priority=urgent')
+                }}>
+                  <Statistic title={<span style={{ fontSize: 11 }}>紧急</span>} value={workOrders.filter(w => w.priority === 'urgent').length} valueStyle={{ fontSize: 18, color: '#ff4d4f' }} />
+                </div>
+              </Col>
+              <Col span={8}>
+                <div style={{ cursor: 'pointer' }} onClick={(e) => {
+                  e.stopPropagation()
+                  setWorkOrderFilter({ priority: 'high' })
+                  navigate('/device?tab=workorders&priority=high')
+                }}>
+                  <Statistic title={<span style={{ fontSize: 11 }}>高优</span>} value={workOrders.filter(w => w.priority === 'high').length} valueStyle={{ fontSize: 18, color: '#fa8c16' }} />
+                </div>
+              </Col>
+              <Col span={8}>
+                <div style={{ cursor: 'pointer' }} onClick={(e) => {
+                  e.stopPropagation()
+                  setWorkOrderFilter({ status: 'pending' })
+                  navigate('/device?tab=workorders&status=pending')
+                }}>
+                  <Statistic title={<span style={{ fontSize: 11 }}>待派</span>} value={workOrders.filter(w => w.status === 'pending').length} valueStyle={{ fontSize: 18, color: '#1677ff' }} />
+                </div>
+              </Col>
             </Row>
             <Divider style={{ margin: '10px 0' }} />
             <Title level={5} style={{ fontSize: 12, margin: '0 0 8px', color: '#8c8c8c' }}>⚠️ 备件预警</Title>
