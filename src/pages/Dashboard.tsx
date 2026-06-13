@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react'
-import { Row, Col, Card, Statistic, Progress, List, Tag, Space, Typography, Divider, App as AntdApp, Tooltip, Badge, Avatar } from 'antd'
+import React, { useMemo, useState } from 'react'
+import { Row, Col, Card, Statistic, Progress, List, Tag, Space, Typography, Divider, App as AntdApp, Tooltip, Badge, Avatar, DatePicker } from 'antd'
 import {
   UserOutlined, CloudOutlined, ThunderboltOutlined, AlertOutlined,
   RiseOutlined, TeamOutlined, ToolOutlined, EnvironmentOutlined,
@@ -45,14 +45,15 @@ const Dashboard: React.FC = () => {
     setBookingFilter, setWorkOrderFilter
   } = useAppStore()
 
+  const [scheduleDate, setScheduleDate] = useState(dayjs().format('YYYY-MM-DD'))
   const today = dayjs().format('YYYY-MM-DD')
   const coachCount = coaches.length
 
-  const todayBookings = bookings.filter(b => b.date === today)
-  const bookingCount = todayBookings.filter(b => b.approvalStatus === 'approved' || b.status === 'in_progress' || b.status === 'completed').length
+  const dateBookings = bookings.filter(b => b.date === scheduleDate)
+  const bookingCount = dateBookings.filter(b => b.approvalStatus === 'approved' || b.status === 'in_progress' || b.status === 'completed').length
 
-  const pendingBookings = todayBookings.filter(b => b.approvalStatus === 'pending')
-  const inProgressBookings = todayBookings.filter(b => b.status === 'in_progress')
+  const pendingBookings = dateBookings.filter(b => b.approvalStatus === 'pending')
+  const inProgressBookings = dateBookings.filter(b => b.status === 'in_progress')
   const lowStockParts = spareParts.filter(p => p.stock < p.safeStock)
 
   const todayStats = statistics[statistics.length - 1]
@@ -416,7 +417,8 @@ const Dashboard: React.FC = () => {
                     }
                     else if (item.type === 'schedule') navigate('/schedule')
                     else if (item.type === 'booking') {
-                      setBookingFilter({ approvalStatus: 'pending' })
+                      const bk = item.obj as any
+                      setBookingFilter({ date: bk.date, approvalStatus: 'pending' })
                       navigate('/coach?tab=approvals')
                     }
                     message.info('已跳转到对应模块')
@@ -497,10 +499,18 @@ const Dashboard: React.FC = () => {
           <Card
             className="stat-card success-card"
             title={<Space><TeamOutlined style={{ color: '#52c41a' }} />教练排班概况</Space>}
-            extra={<Tag color="green">今日</Tag>}
+            extra={
+              <DatePicker
+                value={dayjs(scheduleDate)}
+                size="small"
+                style={{ width: 120 }}
+                onChange={(d) => d && setScheduleDate(dayjs(d).format('YYYY-MM-DD'))}
+                allowClear={false}
+              />
+            }
             hoverable
             onClick={() => {
-              setBookingFilter({ date: today, approvalStatus: 'pending' })
+              setBookingFilter({ date: scheduleDate, approvalStatus: 'pending' })
               navigate('/coach?tab=approvals')
             }}
           >
@@ -516,16 +526,16 @@ const Dashboard: React.FC = () => {
               <Col span={12}>
                 <div style={{ cursor: 'pointer' }} onClick={(e) => {
                   e.stopPropagation()
-                  setBookingFilter({ date: today })
+                  setBookingFilter({ date: scheduleDate })
                   navigate('/coach?tab=schedules')
                 }}>
-                  <Statistic title={<span style={{ fontSize: 11 }}>今日课时</span>} value={bookingCount} valueStyle={{ fontSize: 18 }} />
+                  <Statistic title={<span style={{ fontSize: 11 }}>当日课时</span>} value={bookingCount} valueStyle={{ fontSize: 18 }} />
                 </div>
               </Col>
               <Col span={12}>
                 <div style={{ cursor: 'pointer' }} onClick={(e) => {
                   e.stopPropagation()
-                  setBookingFilter({ date: today, approvalStatus: 'pending' })
+                  setBookingFilter({ date: scheduleDate, approvalStatus: 'pending' })
                   navigate('/coach?tab=approvals')
                 }}>
                   <Statistic title={<span style={{ fontSize: 11 }}>待审批</span>}

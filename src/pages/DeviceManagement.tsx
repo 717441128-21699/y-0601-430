@@ -349,7 +349,7 @@ const DeviceManagement: React.FC = () => {
 
   const handleStart = (values: any) => {
     if (!startModal) return
-    startWorkOrder(startModal.id, values.note)
+    startWorkOrder(startModal.id, values.note, values.arrivalTime ? dayjs(values.arrivalTime).format('YYYY-MM-DD HH:mm:ss') : undefined)
     message.success('已开始维修')
     addNotification({ type: 'info', title: '维修开始', message: `${startModal.deviceName}维保工单已开始执行` })
     setStartModal(null)
@@ -357,7 +357,14 @@ const DeviceManagement: React.FC = () => {
 
   const handleComplete = (values: any) => {
     if (!completeModal) return
-    completeWorkOrder(completeModal.id, values.actualHours, values.note)
+    completeWorkOrder(
+      completeModal.id,
+      values.actualHours,
+      values.note || values.repairConclusion,
+      values.repairConclusion,
+      values.acceptanceResult,
+      values.acceptanceNote
+    )
     message.success('工单已完成！')
     addNotification({ type: 'success', title: '维保工单完成', message: `${completeModal.deviceName}已恢复正常运行` })
     setCompleteModal(null)
@@ -650,8 +657,22 @@ const DeviceManagement: React.FC = () => {
                 <Paragraph style={{ margin: 0 }}>{selectedWO.description}</Paragraph>
               </Descriptions.Item>
               <Descriptions.Item label="计划日期">{selectedWO.scheduledDate || <Text type="secondary">待定</Text>}</Descriptions.Item>
+              <Descriptions.Item label="到场时间">
+                {selectedWO.arrivalTime || <Text type="secondary">待登记</Text>}
+              </Descriptions.Item>
               <Descriptions.Item label="实际工时">
                 {selectedWO.actualHours ? `${selectedWO.actualHours} 小时` : <Text type="secondary">进行中</Text>}
+              </Descriptions.Item>
+              <Descriptions.Item label="处理结论">
+                {selectedWO.repairConclusion || <Text type="secondary">待填写</Text>}
+              </Descriptions.Item>
+              <Descriptions.Item label="验收结果">
+                {selectedWO.acceptanceResult ? (
+                  <Tag color={selectedWO.acceptanceResult === 'pass' ? 'green' : selectedWO.acceptanceResult === 'fail' ? 'red' : 'orange'}>
+                    {selectedWO.acceptanceResult === 'pass' ? '验收通过' : selectedWO.acceptanceResult === 'fail' ? '验收不通过' : '待验收'}
+                  </Tag>
+                ) : <Text type="secondary">待验收</Text>}
+                {selectedWO.acceptanceNote && <div style={{ marginTop: 4, fontSize: 12, color: '#595959' }}>{selectedWO.acceptanceNote}</div>}
               </Descriptions.Item>
               <Descriptions.Item label="所需备件">
                 {selectedWO.partsRequired.length ? (
@@ -693,6 +714,61 @@ const DeviceManagement: React.FC = () => {
                 )
               })}
             </Timeline>
+
+            <Divider orientation="left" style={{ marginTop: 16 }}>故障分析与评估</Divider>
+            {(() => {
+              const device = devices.find(d => d.id === selectedWO.deviceId)
+              const deviceWorkOrders = workOrders.filter(w => w.deviceId === selectedWO.deviceId)
+              const relatedParts = spareParts.filter(p => p.compatibleDevices.includes(selectedWO.deviceType))
+              const similarFaults = deviceWorkOrders.filter(w => w.id !== selectedWO.id && w.type === selectedWO.type && dayjs(w.createdAt).isAfter(dayjs().subtract(30, 'day')))
+              const estCompletion = selectedWO.startedAt
+                ? dayjs(selectedWO.startedAt).add(selectedWO.estimatedHours, 'hour').format('YYYY-MM-DD HH:mm')
+                : selectedWO.scheduledDate
+                  ? dayjs(selectedWO.scheduledDate).add(selectedWO.estimatedHours, 'hour').format('YYYY-MM-DD')
+                  : '待派单'
+              const isOverdue = selectedWO.startedAt && dayjs().isAfter(dayjs(selectedWO.startedAt).add(selectedWO.estimatedHours, 'hour'))
+              return (
+                <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
+                  <Col span={8}>
+                    <Card size="small" style={{ textAlign: 'center' }}>
+                      <Statistic
+                        title={<span style={{ fontSize: 11 }}>近30天同类故障</span>}
+                        value={similarFaults.length}
+                        suffix="次"
+                        valueStyle={{ fontSize: 20, color: similarFaults.length >= 3 ? '#ff4d4f' : similarFaults.length >= 1 ? '#faad14' : '#52c41a' }}
+                      />
+                      {similarFaults.length >= 3 && <Tag color="red" style={{ marginTop: 4, fontSize: 10 }}>高频故障</Tag>}
+                      {similarFaults.length > 0 && similarFaults.length < 3 && <Tag color="orange" style={{ marginTop: 4, fontSize: 10 }}>偶发故障</Tag>}
+                      {similarFaults.length === 0 && <Tag color="green" style={{ marginTop: 4, fontSize: 10 }}>首次故障</Tag>}
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card size="small" style={{ textAlign: 'center' }}>
+                      <Statistic
+                        title={<span style={{ fontSize: 11 }}>预计恢复时间</span>}
+                        value={estCompletion.slice(5)}
+                        valueStyle={{ fontSize: 15, color: isOverdue ? '#ff4d4f' : '#1677ff' }}
+                      />
+                      {isOverdue && <Tag color="red" style={{ marginTop: 4, fontSize: 10 }}>已超期</Tag>}
+                      {!isOverdue && selectedWO.status === 'in_progress' && <Tag color="blue" style={{ marginTop: 4, fontSize: 10 }}>维修中</Tag>}
+                      {selectedWO.status === 'completed' && <Tag color="green" style={{ marginTop: 4, fontSize: 10 }}>已完成</Tag>}
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card size="small" style={{ textAlign: 'center' }}>
+                      <Statistic
+                        title={<span style={{ fontSize: 11 }}>常用备件可用</span>}
+                        value={relatedParts.filter(p => p.stock >= p.safeStock).length}
+                        suffix={`/${relatedParts.length}`}
+                        valueStyle={{ fontSize: 20, color: relatedParts.filter(p => p.stock < p.safeStock).length > 0 ? '#faad14' : '#52c41a' }}
+                      />
+                      {relatedParts.filter(p => p.stock < p.safeStock).length > 0 && <Tag color="orange" style={{ marginTop: 4, fontSize: 10 }}>部分缺料</Tag>}
+                      {relatedParts.filter(p => p.stock >= p.safeStock).length === relatedParts.length && <Tag color="green" style={{ marginTop: 4, fontSize: 10 }}>库存充足</Tag>}
+                    </Card>
+                  </Col>
+                </Row>
+              )
+            })()}
 
             <Divider orientation="left" style={{ marginTop: 16 }}>设备档案</Divider>
             {(() => {
@@ -924,6 +1000,9 @@ const DeviceManagement: React.FC = () => {
               description={`${startModal.deviceName} - ${startModal.description.slice(0, 40)}...`}
             />
             <Form form={startForm} layout="vertical" onFinish={handleStart}>
+              <Form.Item label="到场时间" name="arrivalTime">
+                <DatePicker showTime style={{ width: '100%' }} placeholder="选择实际到场时间" />
+              </Form.Item>
               <Form.Item label="现场情况/开始备注" name="note">
                 <Input.TextArea rows={3} placeholder="请描述现场检查情况或维修注意事项" />
               </Form.Item>
@@ -943,7 +1022,7 @@ const DeviceManagement: React.FC = () => {
         open={!!completeModal}
         onCancel={() => setCompleteModal(null)}
         footer={null}
-        width={480}
+        width={520}
       >
         {completeModal && (
           <div>
@@ -955,8 +1034,20 @@ const DeviceManagement: React.FC = () => {
               <Form.Item label="实际工时" name="actualHours" rules={[{ required: true, message: '请填写实际工时' }]}>
                 <InputNumber min={0} step={0.5} style={{ width: '100%' }} addonAfter="小时" />
               </Form.Item>
-              <Form.Item label="维修完成情况" name="note">
-                <Input.TextArea rows={3} placeholder="请描述维修内容、更换备件、设备现状等" />
+              <Form.Item label="处理结论" name="repairConclusion" rules={[{ required: true, message: '请填写处理结论' }]}>
+                <Input.TextArea rows={3} placeholder="请描述维修内容、更换备件、故障原因分析等" />
+              </Form.Item>
+              <Divider style={{ margin: '12px 0' }} />
+              <Title level={5} style={{ fontSize: 14, margin: '0 0 8px' }}>验收结果</Title>
+              <Form.Item label="验收结论" name="acceptanceResult" rules={[{ required: true, message: '请选择验收结果' }]}>
+                <Radio.Group>
+                  <Radio value="pass">验收通过</Radio>
+                  <Radio value="fail">验收不通过</Radio>
+                  <Radio value="pending">待验收</Radio>
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item label="验收备注" name="acceptanceNote">
+                <Input.TextArea rows={2} placeholder="验收意见或后续处理建议" />
               </Form.Item>
               <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
                 <Space>

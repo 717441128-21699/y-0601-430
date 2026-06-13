@@ -263,6 +263,11 @@ export interface WorkOrder {
   partsRequired: PartRequirement[]
   notes?: string
   operationLogs: WorkOrderOperationLog[]
+  originalDeviceStatus?: DeviceStatus
+  arrivalTime?: string
+  repairConclusion?: string
+  acceptanceResult?: 'pass' | 'fail' | 'pending'
+  acceptanceNote?: string
 }
 
 export interface PartRequirement {

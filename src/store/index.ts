@@ -58,8 +58,8 @@ interface AppState {
   addWorkOrder: (order: Omit<WorkOrder, 'id' | 'createdAt' | 'operationLogs'>) => void
   updateWorkOrder: (id: string, updates: Partial<WorkOrder>) => void
   assignWorkOrder: (id: string, teamId: string, teamName: string, assignee: string, scheduledDate: string, note?: string) => void
-  startWorkOrder: (id: string, note?: string) => void
-  completeWorkOrder: (id: string, actualHours: number, note?: string) => void
+  startWorkOrder: (id: string, note?: string, arrivalTime?: string) => void
+  completeWorkOrder: (id: string, actualHours: number, note?: string, repairConclusion?: string, acceptanceResult?: WorkOrder['acceptanceResult'], acceptanceNote?: string) => void
   addWorkOrderLog: (id: string, action: WorkOrderOperationLog['action'], operator: string, note?: string) => void
   setWorkOrderFilter: (filter: { status?: string; priority?: string }) => void
 
@@ -154,10 +154,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addWorkOrder: (order) => set(state => {
     const currentUser = get().currentUser
+    const device = state.devices.find(d => d.id === order.deviceId)
     const newWo: WorkOrder = {
       ...order,
       id: 'wo_' + Date.now().toString(36),
       createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      originalDeviceStatus: device?.status,
       operationLogs: [{
         id: 'log_' + Date.now(),
         action: 'created',
@@ -188,60 +190,105 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   assignWorkOrder: (id, teamId, teamName, assignee, scheduledDate, note) => set(state => {
     const currentUser = get().currentUser
-    return {
-      workOrders: state.workOrders.map(w => w.id === id ? {
-        ...w,
-        status: 'assigned',
-        teamId,
-        teamName,
-        assignee,
-        scheduledDate,
-        operationLogs: [...w.operationLogs, {
-          id: 'log_' + Date.now(),
-          action: 'assigned',
-          timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-          operator: currentUser.name,
-          note: note || `派单给 ${teamName}（${assignee}）`
-        }]
-      } : w)
-    }
+    const workOrder = state.workOrders.find(w => w.id === id)
+    if (!workOrder) return state
+    const newWorkOrders = state.workOrders.map(w => w.id === id ? {
+      ...w,
+      status: 'assigned' as const,
+      teamId,
+      teamName,
+      assignee,
+      scheduledDate,
+      operationLogs: [...w.operationLogs, {
+        id: 'log_' + Date.now(),
+        action: 'assigned' as const,
+        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operator: currentUser.name,
+        note: note || `派单给 ${teamName}（${assignee}）`
+      }]
+    } : w)
+    const newDevices = state.devices.map(d => d.id === workOrder.deviceId ? { ...d, status: 'maintenance' as const } : d)
+    return { workOrders: newWorkOrders, devices: newDevices }
   }),
 
-  startWorkOrder: (id, note) => set(state => {
+  startWorkOrder: (id, note, arrivalTime) => set(state => {
     const currentUser = get().currentUser
-    return {
-      workOrders: state.workOrders.map(w => w.id === id ? {
-        ...w,
-        status: 'in_progress',
-        startedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-        operationLogs: [...w.operationLogs, {
-          id: 'log_' + Date.now(),
-          action: 'started',
-          timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-          operator: currentUser.name,
-          note: note || '开始维修作业'
-        }]
-      } : w)
+    const workOrder = state.workOrders.find(w => w.id === id)
+    if (!workOrder) return state
+    const newLogs = [...workOrder.operationLogs, {
+      id: 'log_' + Date.now(),
+      action: 'started' as const,
+      timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      operator: currentUser.name,
+      note: note || '开始维修作业'
+    }]
+    if (arrivalTime) {
+      newLogs.push({
+        id: 'log_' + (Date.now() + 1),
+        action: 'note' as const,
+        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operator: currentUser.name,
+        note: `现场到场时间：${arrivalTime}`
+      })
     }
+    const newWorkOrders = state.workOrders.map(w => w.id === id ? {
+      ...w,
+      status: 'in_progress' as const,
+      startedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      arrivalTime: arrivalTime || w.arrivalTime,
+      operationLogs: newLogs
+    } : w)
+    const newDevices = state.devices.map(d => d.id === workOrder.deviceId ? { ...d, status: 'maintenance' as const } : d)
+    return { workOrders: newWorkOrders, devices: newDevices }
   }),
 
-  completeWorkOrder: (id, actualHours, note) => set(state => {
+  completeWorkOrder: (id, actualHours, note, repairConclusion, acceptanceResult, acceptanceNote) => set(state => {
     const currentUser = get().currentUser
-    return {
-      workOrders: state.workOrders.map(w => w.id === id ? {
-        ...w,
-        status: 'completed',
-        completedAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-        actualHours,
-        operationLogs: [...w.operationLogs, {
-          id: 'log_' + Date.now(),
-          action: 'completed',
-          timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-          operator: currentUser.name,
-          note: note || `维修完成，耗时 ${actualHours} 小时`
-        }]
-      } : w)
-    }
+    const workOrder = state.workOrders.find(w => w.id === id)
+    if (!workOrder) return state
+    const originalStatus = workOrder.originalDeviceStatus || 'running'
+    const newStatus = originalStatus === 'fault' ? 'running' : originalStatus
+    const newStatusValue = acceptanceResult === 'fail' ? 'in_progress' : 'completed'
+    const newLogs = [...workOrder.operationLogs,
+      {
+        id: 'log_' + Date.now(),
+        action: 'completed' as const,
+        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operator: currentUser.name,
+        note: note || `维修完成，耗时 ${actualHours} 小时`
+      },
+      ...(repairConclusion ? [{
+        id: 'log_' + (Date.now() + 1),
+        action: 'note' as const,
+        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operator: currentUser.name,
+        note: `处理结论：${repairConclusion}`
+      }] : []),
+      ...(acceptanceResult ? [{
+        id: 'log_' + (Date.now() + 2),
+        action: 'note' as const,
+        timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        operator: currentUser.name,
+        note: `验收结论：${acceptanceResult === 'pass' ? '验收通过' : acceptanceResult === 'fail' ? '验收不通过' : '待验收'}${acceptanceNote ? `，${acceptanceNote}` : ''}`
+      }] : [])
+    ]
+    const newWorkOrders = state.workOrders.map(w => w.id === id ? {
+      ...w,
+      status: newStatusValue as WorkOrder['status'],
+      completedAt: acceptanceResult !== 'fail' ? dayjs().format('YYYY-MM-DD HH:mm:ss') : undefined,
+      actualHours,
+      repairConclusion,
+      acceptanceResult,
+      acceptanceNote,
+      operationLogs: newLogs
+    } : w)
+    const newDevices = state.devices.map(d => d.id === workOrder.deviceId ? {
+      ...d,
+      status: acceptanceResult === 'fail' ? 'maintenance' as const : (newStatus as Device['status']),
+      lastMaintenance: acceptanceResult !== 'fail' ? dayjs().format('YYYY-MM-DD') : d.lastMaintenance,
+      runHours: acceptanceResult !== 'fail' ? 0 : d.runHours
+    } : d)
+    return { workOrders: newWorkOrders, devices: newDevices }
   }),
 
   setWorkOrderFilter: (filter) => set({ workOrderFilter: filter }),
