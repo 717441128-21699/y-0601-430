@@ -241,6 +241,8 @@ export interface WorkOrder {
   priority: 'low' | 'medium' | 'high' | 'urgent'
   status: WorkOrderStatus
   description: string
+  location: string
+  reporter?: string
   teamId?: string
   teamName?: string
   assignee?: string
@@ -310,11 +312,11 @@ export interface MapHeatPoint {
 
 export interface Notification {
   id: string
-  type: 'alert' | 'info' | 'success' | 'warning'
+  type: 'alert' | 'info' | 'success' | 'warning' | 'danger'
   title: string
   message: string
   timestamp: string
-  read: boolean
+  read?: boolean
   relatedId?: string
   relatedType?: string
 }

@@ -38,7 +38,7 @@ const CoachManagement: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
   const {
     coaches, students, bookings, slopes,
-    updateBookingApproval, addBooking, addNotification
+    updateBookingApproval, addBooking, addNotification, rescheduleBooking
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState('schedule')
@@ -102,9 +102,29 @@ const CoachManagement: React.FC = () => {
 
   const handleReschedule = (values: any) => {
     if (!rescheduleModal) return
-    updateBookingApproval(rescheduleModal.id, 'approved', 'scheduled')
+    const newDate = dayjs(values.newDate).format('YYYY-MM-DD')
+    const startTime = values.newTime ? values.newTime[0].format('HH:mm') : rescheduleModal.startTime
+    const endTime = values.newTime ? values.newTime[1].format('HH:mm') : rescheduleModal.endTime
+    const newCoachId = values.newCoachId
+    const newCoach = newCoachId ? coaches.find(c => c.id === newCoachId) : null
+
+    const updates: any = {
+      date: newDate,
+      startTime,
+      endTime
+    }
+    if (newCoach) {
+      updates.coachId = newCoach.id
+      updates.coachName = newCoach.name
+    }
+
+    rescheduleBooking(rescheduleModal.id, updates)
     message.success('调课申请已处理并重新安排')
-    addNotification({ type: 'success', title: '调课申请已批准', message: `${rescheduleModal.studentName}的课程已调整` })
+    addNotification({
+      type: 'success',
+      title: '调课申请已批准',
+      message: `${rescheduleModal.studentName}的课程已调整至${newDate} ${startTime}-${endTime}`
+    })
     setRescheduleModal(null)
   }
 

@@ -26,7 +26,7 @@ const DeviceManagement: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
   const {
     workOrders, spareParts, devices, repairTeams, slopes,
-    updateWorkOrder, addNotification
+    updateWorkOrder, addNotification, addWorkOrder
   } = useAppStore()
 
   const [activeTab, setActiveTab] = useState('workorders')
@@ -335,18 +335,28 @@ const DeviceManagement: React.FC = () => {
   }
 
   const handleAddWo = (values: any) => {
-    const newWo: WorkOrder = {
-      ...values,
-      id: 'wo_' + Date.now().toString(36),
+    const device = devices.find(d => d.id === values.deviceId)
+    addWorkOrder({
+      deviceId: values.deviceId,
+      deviceName: device?.name || values.deviceName,
       deviceType: values.deviceType,
+      type: values.type,
+      priority: values.priority,
+      description: values.description,
+      estimatedHours: values.estimatedHours || 4,
       status: 'pending',
-      createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      location: device?.location || '雪场',
+      reporter: '手动创建',
       partsRequired: []
-    }
-    workOrders.push(newWo)
+    })
     message.success('维保工单创建成功！')
     setAddWoVisible(false)
     addWoForm.resetFields()
+    addNotification({
+      type: values.priority === 'urgent' ? 'danger' : 'info',
+      title: '新维保工单',
+      message: `${device?.name || values.deviceName} 维保工单已创建，等待派单`
+    })
   }
 
   return (
@@ -695,8 +705,8 @@ const DeviceManagement: React.FC = () => {
                     <Option key={d.id} value={d.id} label={d.name}>
                       <Space>
                         <Text strong>{d.name}</Text>
-                        <Tag color={({ snowmaker: 'blue', cablecar: 'purple', magicarpet: 'cyan', snowgroomer: 'geekblue' } as Record<DeviceType, string>)[d.type]} style={{ fontSize: 11 }}>
-                          ({ snowmaker: '造雪机', cablecar: '缆车', magicarpet: '魔毯', snowgroomer: '压雪车' }[d.type])
+                        <Tag color={{ snowmaker: 'blue', cablecar: 'purple', magicarpet: 'cyan', snowgroomer: 'geekblue' }[d.type]} style={{ fontSize: 11 }}>
+                          {({ snowmaker: '造雪机', cablecar: '缆车', magicarpet: '魔毯', snowgroomer: '压雪车' } as Record<string, string>)[d.type]}
                         </Tag>
                         {d.status === 'fault' && <Tag color="red" style={{ fontSize: 11 }}>故障</Tag>}
                         {d.status === 'warning' && <Tag color="orange" style={{ fontSize: 11 }}>告警</Tag>}

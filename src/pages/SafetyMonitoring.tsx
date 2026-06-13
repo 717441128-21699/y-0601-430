@@ -46,7 +46,7 @@ const SafetyMonitoring: React.FC = () => {
 
   const filteredAlerts = useMemo(() => {
     if (resolvedFilter === 'all') return densityAlerts
-    return densityAlerts.filter(a => a.resolved === !resolvedFilter)
+    return densityAlerts.filter(a => a.resolved === resolvedFilter)
   }, [densityAlerts, resolvedFilter])
 
   const densityMapOption = useMemo(() => {
@@ -682,7 +682,7 @@ const SafetyMonitoring: React.FC = () => {
       </Drawer>
 
       <Modal
-        title={<Space><SendOutlined style={{ color: '#1677ff' }} /> 指派救援人员 - {assignModal?.slopeName}</Modal>}
+        title={<Space><SendOutlined style={{ color: '#1677ff' }} /> 指派救援人员 - {assignModal?.slopeName}</Space>}
         open={!!assignModal}
         onCancel={() => setAssignModal(null)}
         footer={null}

@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import type {
   Slope, Device, Coach, Student, CourseBooking, VisitorLocation, DensityAlert,
   RescueRecord, Rescuer, WorkOrder, SparePart, RepairTeam, StatisticsDaily,
-  ScheduleTask, WeatherForecast, VisitorForecast, MapHeatPoint, Notification
+  ScheduleTask, WeatherForecast, VisitorForecast, MapHeatPoint, Notification,
+  SnowMakingPlan, GroomingPlan, CableCarPlan
 } from '@/types'
 import {
   mockWeather, mockVisitorForecast, mockSlopes, mockDevices, mockCoaches, mockStudents,
@@ -10,6 +11,9 @@ import {
   mockRepairTeams, mockWorkOrders, mockSpareParts, mockStatistics, mockScheduleTasks,
   mockHeatPoints, mockNotifications
 } from '@/mock'
+import dayjs from 'dayjs'
+
+const uid = () => Math.random().toString(36).slice(2, 10)
 
 interface AppState {
   weather: WeatherForecast[]
@@ -39,12 +43,20 @@ interface AppState {
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void
 
   updateBookingApproval: (id: string, approvalStatus: 'approved' | 'rejected', status?: string) => void
+  updateBooking: (id: string, updates: Partial<CourseBooking>) => void
+  addBooking: (booking: Omit<CourseBooking, 'id'>) => void
+  rescheduleBooking: (id: string, updates: Partial<CourseBooking> & { approvalStatus?: 'approved' }) => void
+
+  addScheduleTask: (task: Omit<ScheduleTask, 'id' | 'createdAt'>) => void
   updateScheduleApproval: (id: string, approvalStatus: 'approved' | 'rejected') => void
+  pushScheduleToTerminal: (scheduleId: string) => boolean
+
+  addWorkOrder: (order: Omit<WorkOrder, 'id' | 'createdAt'>) => void
   updateWorkOrder: (id: string, updates: Partial<WorkOrder>) => void
+  assignWorkOrder: (id: string, teamId: string, teamName: string, assignee: string, scheduledDate: string) => void
+
   updateRescueRecord: (id: string, updates: Partial<RescueRecord>) => void
   assignRescuers: (rescueId: string, rescuerIds: string[]) => void
-  pushScheduleToTerminal: (scheduleId: string) => boolean
-  addBooking: (booking: Omit<CourseBooking, 'id'>) => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -97,6 +109,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     } : b)
   })),
 
+  updateBooking: (id, updates) => set(state => ({
+    bookings: state.bookings.map(b => b.id === id ? { ...b, ...updates } : b)
+  })),
+
+  addBooking: (booking) => set(state => ({
+    bookings: [...state.bookings, { ...booking, id: 'b_' + Date.now() }]
+  })),
+
+  rescheduleBooking: (id, updates) => set(state => ({
+    bookings: state.bookings.map(b => b.id === id ? { ...b, ...updates, status: 'scheduled', approvalStatus: 'approved' } : b)
+  })),
+
+  addScheduleTask: (task) => set(state => ({
+    scheduleTasks: [...state.scheduleTasks, {
+      ...task,
+      id: 'sch_' + task.date + '_' + Date.now().toString(36),
+      createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss')
+    }]
+  })),
+
   updateScheduleApproval: (id, approvalStatus) => set(state => ({
     scheduleTasks: state.scheduleTasks.map(s => s.id === id ? {
       ...s,
@@ -106,8 +138,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     } : s)
   })),
 
+  pushScheduleToTerminal: () => Math.random() > 0.05,
+
+  addWorkOrder: (order) => set(state => ({
+    workOrders: [{
+      ...order,
+      id: 'wo_' + Date.now().toString(36),
+      createdAt: dayjs().format('YYYY-MM-DD HH:mm:ss')
+    }, ...state.workOrders]
+  })),
+
   updateWorkOrder: (id, updates) => set(state => ({
     workOrders: state.workOrders.map(w => w.id === id ? { ...w, ...updates } : w)
+  })),
+
+  assignWorkOrder: (id, teamId, teamName, assignee, scheduledDate) => set(state => ({
+    workOrders: state.workOrders.map(w => w.id === id ? {
+      ...w, status: 'assigned', teamId, teamName, assignee, scheduledDate
+    } : w)
   })),
 
   updateRescueRecord: (id, updates) => set(state => ({
@@ -115,25 +163,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   })),
 
   assignRescuers: (rescueId, rescuerIds) => set(state => {
-    const rescuers = get().rescuers
-    const assignedRescuers = rescuers.filter(r => rescuerIds.includes(r.id))
+    const rescuersList = get().rescuers
+    const assignedRescuers = rescuersList.filter(r => rescuerIds.includes(r.id))
     const records = state.rescueRecords.map(r => r.id === rescueId ? {
       ...r,
       rescuerIds,
       rescuerNames: assignedRescuers.map(r2 => r2.name),
-      status: 'dispatched'
+      status: 'dispatched' as const
     } : r)
     const updatedRescuers = state.rescuers.map(r =>
       rescuerIds.includes(r.id) ? { ...r, status: 'on_mission' as const } : r
     )
     return { rescueRecords: records, rescuers: updatedRescuers }
-  }),
-
-  pushScheduleToTerminal: () => {
-    return Math.random() > 0.05
-  },
-
-  addBooking: (booking) => set(state => ({
-    bookings: [...state.bookings, { ...booking, id: 'b_' + Date.now() }]
-  }))
+  })
 }))

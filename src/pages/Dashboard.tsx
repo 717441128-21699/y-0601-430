@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react'
-import { Row, Col, Card, Statistic, Progress, List, Tag, Space, Typography, Divider, App as AntdApp, Tooltip } from 'antd'
+import { Row, Col, Card, Statistic, Progress, List, Tag, Space, Typography, Divider, App as AntdApp, Tooltip, Badge, Avatar } from 'antd'
 import {
   UserOutlined, CloudOutlined, ThunderboltOutlined, AlertOutlined,
   RiseOutlined, TeamOutlined, ToolOutlined, EnvironmentOutlined,
   CheckCircleOutlined, ExclamationCircleOutlined, WarningOutlined,
-  ClockCircleOutlined, CalendarOutlined
+  ClockCircleOutlined, CalendarOutlined, ScheduleOutlined
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import { useNavigate } from 'react-router-dom'
@@ -40,11 +40,11 @@ const Dashboard: React.FC = () => {
   const { message } = AntdApp.useApp()
   const {
     slopes, devices, weather, statistics, densityAlerts, rescueRecords,
-    workOrders, scheduleTasks, coachCount, bookingCount
+    workOrders, scheduleTasks, coaches, bookings
   } = useAppStore()
 
-  const coachCount = useAppStore(s => s.coaches.length)
-  const bookingCount = useAppStore(s => s.bookings.length)
+  const coachCount = coaches.length
+  const bookingCount = bookings.length
 
   const todayStats = statistics[statistics.length - 1]
   const yesterdayStats = statistics[statistics.length - 2]
@@ -391,7 +391,7 @@ const Dashboard: React.FC = () => {
                   title: `[排程] ${s.date}排程待审批`, desc: '包含造雪/压雪/缆车计划共' + (s.snowMakingPlan.length + s.groomingPlan.length + s.cableCarPlan.length) + '项',
                   time: s.createdAt, obj: s
                 })),
-                ...useAppStore.getState().bookings.filter(b => b.approvalStatus === 'pending').map(b => ({
+                ...bookings.filter(b => b.approvalStatus === 'pending').map(b => ({
                   key: b.id, type: 'booking' as const, level: 'info',
                   title: `[调课] ${b.studentName} - ${b.date}`, desc: b.rescheduleReason || '新课预约审批', time: b.date, obj: b
                 }))
@@ -487,7 +487,7 @@ const Dashboard: React.FC = () => {
           >
             <Statistic
               title={<Text type="secondary" style={{ fontSize: 12 }}>在岗教练</Text>}
-              value={useAppStore.getState().coaches.filter(c => c.status === 'on_duty').length}
+              value={coaches.filter(c => c.status === 'on_duty').length}
               suffix={`/ ${coachCount}`}
               valueStyle={{ fontSize: 26, color: '#262626' }}
               style={{ marginBottom: 8 }}

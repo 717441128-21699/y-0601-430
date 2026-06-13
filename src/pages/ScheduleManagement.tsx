@@ -5,11 +5,11 @@ import {
   Select, List, Avatar, Steps, Tooltip, Alert, Drawer, Badge, Empty
 } from 'antd'
 import {
-  ScheduleOutlined, SnowflakeOutlined, CarOutlined, RocketOutlined,
+  ScheduleOutlined, CloudOutlined, CarOutlined, RocketOutlined,
   CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ReloadOutlined,
   ThunderboltOutlined, DatabaseOutlined, PlusOutlined, HistoryOutlined,
   SettingOutlined, FileTextOutlined, DesktopOutlined, WarningOutlined,
-  CloudSyncOutlined
+  CloudSyncOutlined, BarChartOutlined
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import dayjs from 'dayjs'
@@ -30,7 +30,7 @@ const difficultyMap: Record<string, { color: string; text: string }> = {
 
 const ScheduleManagement: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
-  const { scheduleTasks, slopes, devices, updateScheduleApproval, pushScheduleToTerminal, addNotification } = useAppStore()
+  const { scheduleTasks, slopes, devices, updateScheduleApproval, pushScheduleToTerminal, addNotification, addScheduleTask } = useAppStore()
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleTask | null>(scheduleTasks[0] || null)
   const [detailVisible, setDetailVisible] = useState(false)
   const [genModalVisible, setGenModalVisible] = useState(false)
@@ -44,6 +44,100 @@ const ScheduleManagement: React.FC = () => {
   const generateScheduleAlgorithm = (values: any) => {
     setGenLoading(true)
     setTimeout(() => {
+      const dateStr = values.date ? dayjs(values.date).format('YYYY-MM-DD') : dayjs().add(1, 'day').format('YYYY-MM-DD')
+      const waterQuota = values.waterQuota || 12000
+      const powerQuota = values.powerQuota || 18000
+      const intensity = values.snowIntensity || 70
+      const priority = values.priority || 'balanced'
+      const snowWindow = values.snowWindow || 'night'
+
+      const openSlopes = slopes.filter(s => s.status !== 'closed')
+      const snowMakerDevices = devices.filter(d => d.type === 'snowmaker' && d.status !== 'fault')
+      const cableCarDevices = devices.filter(d => d.type === 'cablecar')
+      const groomerDevices = devices.filter(d => d.type === 'snowgroomer')
+
+      let waterUsed = 0
+      let powerUsed = 0
+
+      const snowMakingPlan = snowMakerDevices.map(d => {
+        const factor = intensity / 100
+        const waterAlloc = Math.floor((600 + Math.random() * 400) * factor)
+        const powerAlloc = Math.floor((180 + Math.random() * 140) * factor)
+        waterUsed += waterAlloc
+        powerUsed += powerAlloc
+
+        let startTime = '21:00'
+        let endTime = '次日05:00'
+        if (snowWindow === 'full') { startTime = '09:00'; endTime = '次日05:00' }
+        if (snowWindow === 'offpeak') { startTime = '22:00'; endTime = '次日04:00' }
+        if (priority === 'revenue') startTime = '20:30'
+        if (priority === 'conservation') { startTime = '22:00'; endTime = '次日04:30' }
+
+        return {
+          id: 'sm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          deviceId: d.id,
+          deviceName: d.name,
+          startTime,
+          endTime,
+          targetThickness: Math.floor(60 + intensity * 0.3 + Math.random() * 20),
+          estimatedOutput: Math.floor(40 + intensity * 0.4 + Math.random() * 30),
+          waterAllocation: waterAlloc,
+          powerAllocation: powerAlloc
+        }
+      })
+
+      const groomingPlan = groomerDevices.flatMap((d, di) => {
+        const plans: any[] = [{
+          id: 'gp_' + Date.now() + '_' + di + '_1',
+          deviceId: d.id,
+          startTime: '05:00',
+          endTime: '07:30',
+          pattern: 'corduroy' as const
+        }]
+        if (openSlopes.length > 5) {
+          plans.push({
+            id: 'gp_' + Date.now() + '_' + di + '_2',
+            deviceId: d.id,
+            startTime: '12:30',
+            endTime: '13:30',
+            pattern: 'general' as const
+          })
+        }
+        return plans
+      })
+
+      const cableCarPlan = cableCarDevices.map((d, di) => ({
+        id: 'cc_' + Date.now() + '_' + di,
+        deviceId: d.id,
+        startTime: '08:00',
+        endTime: '20:30',
+        maintenanceWindowStart: di === 1 ? '12:00' : undefined,
+        maintenanceWindowEnd: di === 1 ? '12:30' : undefined
+      }))
+
+      const newSchedule = {
+        date: dateStr,
+        slopeId: 'all',
+        slopeName: '全场排程',
+        openTime: '08:00',
+        closeTime: '21:00',
+        snowMakingPlan,
+        groomingPlan,
+        cableCarPlan,
+        approvalStatus: 'pending' as const,
+        totalWaterQuota: waterQuota,
+        totalPowerQuota: powerQuota,
+        usedWater: waterUsed,
+        usedPower: powerUsed
+      }
+
+      addScheduleTask(newSchedule)
+      addNotification({
+        type: 'info',
+        title: '新排程方案待审批',
+        message: `${dateStr} 雪道开放与造雪排程方案已生成，请运营主管审批`
+      })
+
       message.success('排程方案已生成！算法综合考虑了积雪厚度、造雪能力、水电配额和缆车维护窗口')
       setGenModalVisible(false)
       setGenLoading(false)
@@ -144,7 +238,7 @@ const ScheduleManagement: React.FC = () => {
 
   const slopePlanColumns: ColumnsType<Slope> = [
     { title: '雪道名称', dataIndex: 'name', key: 'name', width: 130,
-      render: (n, r) => <Space><SnowflakeOutlined /><Text strong>{n}</Text><Tag color={difficultyMap[r.difficulty].color}>{difficultyMap[r.difficulty].text}</Tag></Space> },
+      render: (n, r) => <Space><CloudOutlined /><Text strong>{n}</Text><Tag color={difficultyMap[r.difficulty].color}>{difficultyMap[r.difficulty].text}</Tag></Space> },
     { title: '积雪厚度', dataIndex: 'snowThickness', key: 'snowThickness', width: 120,
       render: (v, r) => (
         <Tooltip title={`最低要求：${r.minSnowThickness}cm`}>
@@ -224,7 +318,7 @@ const ScheduleManagement: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card className="stat-card">
-            <Statistic title={<Space><SnowflakeOutlined /> 造雪机投入</Space>}
+            <Statistic title={<Space><CloudOutlined /> 造雪机投入</Space>}
               value={`${snowMakers.filter(d => d.status === 'running').length}/${snowMakers.length}`} suffix="台"
               valueStyle={{ color: '#13c2c2' }} />
           </Card>
@@ -285,7 +379,7 @@ const ScheduleManagement: React.FC = () => {
 
             <Row gutter={[12, 12]}>
               <Col xs={24} md={16}>
-                <Card size="small" title={<Space><SnowflakeOutlined style={{ color: '#1677ff' }} />雪道开放与积雪状况</Space>}>
+                <Card size="small" title={<Space><CloudOutlined style={{ color: '#1677ff' }} />雪道开放与积雪状况</Space>}>
                   <Table size="small" dataSource={slopes} columns={slopePlanColumns} rowKey="id" pagination={{ pageSize: 6 }} scroll={{ x: 900 }} />
                 </Card>
               </Col>
@@ -317,7 +411,7 @@ const ScheduleManagement: React.FC = () => {
 
             <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
               <Col xs={24} md={12}>
-                <Card size="small" title={<Space><SnowflakeOutlined style={{ color: '#13c2c2' }} />造雪机排程 ({selectedSchedule.snowMakingPlan.length}台)</Space>} bodyStyle={{ padding: 8 }}>
+                <Card size="small" title={<Space><CloudOutlined style={{ color: '#13c2c2' }} />造雪机排程 ({selectedSchedule.snowMakingPlan.length}台)</Space>} bodyStyle={{ padding: 8 }}>
                   <Timeline mode="left" style={{ paddingLeft: 4 }}>
                     {selectedSchedule.snowMakingPlan.slice(0, 6).map((p: SnowMakingPlan) => (
                       <Timeline.Item key={p.id}
